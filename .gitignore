@@ -1,0 +1,23 @@
+# git ignore file
+*.ld
+*.ind
+*.o
+*.d
+*.jlink
+*.emSession
+*.hex
+*.elf
+*.map
+*.asm
+*.eww
+*.ewd
+*.ewp
+*.zip
+*.log
+*.json
+*.bin
+*.dat
+*.uvoptx
+*.uvprojx
+*.icf
+license.txt
