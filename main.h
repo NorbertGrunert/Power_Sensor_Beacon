@@ -10,7 +10,7 @@
 
 #include "FreeRTOS.h"
 
-#define VERSION						"NINA emulator V0.2"
+#define VERSION						"NINA B3 V0.1"
 
 #define	portTICKS_PER_SEC			( configTICK_RATE_HZ )
 #define	portTICKS_PER_MIN			( 60 * portTICKS_PER_SEC )
