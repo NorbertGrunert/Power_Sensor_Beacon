@@ -10,14 +10,15 @@
 
 #include "FreeRTOS.h"
 
-#define VERSION						"NINA B3 V0.1"
+#define VERSION						"NINA-B3"
 
+#define	portTICKS_PER_100MSEC		( configTICK_RATE_HZ / 10 )
 #define	portTICKS_PER_SEC			( configTICK_RATE_HZ )
 #define	portTICKS_PER_MIN			( 60 * portTICKS_PER_SEC )
 
 /* Task stack sizes. The idle task and timer stack sizes are defined in FreeRTOSConfig.h */
-#define bleSTACK_SIZE					( ( unsigned short ) 200 )
-#define bleParserSTACK_SIZE				( ( unsigned short ) 200 )
+#define bleSTACK_SIZE				( ( unsigned short ) 200 )
+#define bleParserSTACK_SIZE			( ( unsigned short ) 200 )
 
 
 /* Task priority definitions. */

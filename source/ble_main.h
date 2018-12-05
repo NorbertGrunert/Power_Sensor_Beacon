@@ -30,19 +30,30 @@
 /* Advertising state. */
 #define ADV_NONE						0
 #define ADV_STD1MBPS					1
-#define ADV_LR125KBPS					2
+#define ADV_LR125KBPS					4
+
+/* Scan state. */
+#define SCAN_NONE						0
+#define SCAN_STD1MBPS					1
+#define SCAN_LR125KBPS					4
 
 /* Advertising interval (in units of 0.625 ms) */
-#define ADV_INTERVAL 					300
+#define ADV_INTERVAL 					160
+
+/* INterval at which the advertising mode is toggled between long range and standard, if configured. */
+#define ADV_INTERLEAVING_TIME			10 * portTICKS_PER_100MSEC
 
 /* SCAN_INTERVAL - Scanning interval, determines scan interval in units of 0.625 millisecond. */
-#define SCAN_INTERVAL 					160
+#define SCAN_INTERVAL 					320
 
 /* SCAN_WINDOW - Scanning window, determines scan window in units of 0.625 millisecond. */
 #define SCAN_WINDOW 					160
 
 #define PHY_1M_PHY						0
 #define PHY_CODED						1
+
+/* Temperature poll interval. */
+#define TEMP_POLL_INTERVAL				20 * portTICKS_PER_SEC
 
 
 /* Public function prototypes. */
@@ -54,8 +65,17 @@ extern void vStartAdvertising( portBASE_TYPE xNewAdvState );
 /* Stop advertising. */
 extern void vStopAdvertising( void );
 
+/* Start scanning. */
+extern void vStartScan( portBASE_TYPE xNewScanState );
+
+/* Stop advertising. */
+extern void vStopScan( void );
+
 /* Return advertising state. */
 extern portBASE_TYPE xGetAdvState( void );
+
+/* Return scan state. */
+extern portBASE_TYPE xGetScanState( void );
 /*-----------------------------------------------------------*/
 
 /* Global variables. */

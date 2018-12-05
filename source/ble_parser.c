@@ -25,9 +25,11 @@
 #include "queue.h"
 #include "semphr.h"
 #include "string.h"
+#include "ble_gap.h"
 
 /* Device specific include files. */
 #include "main.h"
+#include "version.h"
 #include "drv_uart.h"
 #include "ble_parser.h"
 #include "ble_main.h"
@@ -47,7 +49,9 @@ static void vOk( unsigned portBASE_TYPE uxStrgIdx );
 /* Send an 'OK' response with partial match only. */
 static void vOkNoEOLCheck( unsigned portBASE_TYPE uxStrgIdx );
 /* Return version string. */
-static void vSendVersion( unsigned portBASE_TYPE uxStrgIdx );
+static void vGetVersion( unsigned portBASE_TYPE uxStrgIdx );
+/* Return device address string. */
+static void vGetBTAddr( unsigned portBASE_TYPE uxStrgIdx );
 /* Set advertising data. */
 static void vSetAdvData( unsigned portBASE_TYPE uxStrgIdx );
 /* Get advertising data. */
@@ -56,6 +60,10 @@ static void vGetAdvData( unsigned portBASE_TYPE uxStrgIdx );
 static void vSetAdvState( unsigned portBASE_TYPE uxStrgIdx );
 /* Get advertising state. */
 static void vGetAdvState( unsigned portBASE_TYPE uxStrgIdx );
+/* Set scan state. */
+static void vSetScanState( unsigned portBASE_TYPE uxStrgIdx );
+/* Get scan state. */
+static void vGetScanState( unsigned portBASE_TYPE uxStrgIdx );
 /*-----------------------------------------------------------*/
 
 /* Global variables. */
@@ -68,43 +76,26 @@ QueueHandle_t 			xBleParserAtCmdQueue; 	/* BLE AT response indicator queue handl
    memory. */
 char pcAt_At[] 			= "AT";	
 char pcAt_I9[] 			= "ATI9";	
+char pcAt_UMLa[]		= "AT+UMLA?";	
 char pcAt_UBtAd[] 		= "AT+UBTAD=";	
 char pcAt_UBtAdQ[] 		= "AT+UBTAD?";	
 char pcAt_UBtA[]		= "AT+UBTA=";
 char pcAt_UBtAQ[]		= "AT+UBTA?";
+char pcAt_UBtS[]		= "AT+UBTS=";
+char pcAt_UBtSQ[]		= "AT+UBTS?";
 
-/* AT command string for backwars compatiobility with NINA running the ublox
-   software application. */
-char pcAt_E0[] 			= "ATE0";	
-char pcAt_UMRS[]		= "AT+UMRS=";	
-char pcAt_UMLA[] 		= "AT+UMLA=";	
-char pcAt_UBtLeCfg[]	= "AT+UBTLECFG=";	
-char pcAt_UBtLe[] 		= "AT+UBTLE";	
-char pcAt_UBtCfg[] 		= "AT+UBTCFG=";	
-char pcAt_UBtDm[] 		= "AT+UBTDM=";	
-char pcAt_UBtCm[] 		= "AT+UBTCM=";	
-char pcAt_UBtTd[] 		= "AT+UBTD=";	
-char pcAt_CPwrOff[]		= "AT+CPWROFF";	
-	
 /* Table containing pointers to the AT response strings, parameters to be stored
    (if any) and the AT response ID to be sent to the BLE task via queue. */
 static const struct xAT_CMD xAtCmd[] = 
 {
-	 { pcAt_I9, 	 				vSendVersion,				AT_NOMSG						},
+	 { pcAt_I9, 	 				vGetVersion,				AT_NOMSG						},
+	 { pcAt_UMLa, 	 				vGetBTAddr,					AT_NOMSG						},
 	 { pcAt_UBtAd, 	 				vSetAdvData,				AT_NOMSG						},
 	 { pcAt_UBtAdQ,	 				vGetAdvData,				AT_NOMSG						},
 	 { pcAt_UBtA,	 				vSetAdvState,				AT_NOMSG						},
 	 { pcAt_UBtAQ,	 				vGetAdvState,				AT_NOMSG						},
-	 { pcAt_E0, 	 				vOk,						AT_NOMSG						},
-	 { pcAt_UMRS, 	 				vOkNoEOLCheck,				AT_NOMSG						},
-	 { pcAt_UMLA, 	 				vOkNoEOLCheck,				AT_NOMSG						},
-	 { pcAt_UBtLeCfg,  				vOkNoEOLCheck,				AT_NOMSG						},
-	 { pcAt_UBtLe, 	 				vOkNoEOLCheck,				AT_NOMSG						},
-	 { pcAt_UBtCfg, 				vOkNoEOLCheck,				AT_NOMSG						},
-	 { pcAt_UBtDm, 	 				vOkNoEOLCheck,				AT_NOMSG						},
-	 { pcAt_UBtCm, 	 				vOkNoEOLCheck,				AT_NOMSG						},
-	 { pcAt_UBtTd, 	 				vOkNoEOLCheck,				AT_NOMSG						},
-	 { pcAt_CPwrOff, 				vOk,						AT_NOMSG						},
+	 { pcAt_UBtS,	 				vSetScanState,				AT_NOMSG						},
+	 { pcAt_UBtSQ,	 				vGetScanState,				AT_NOMSG						},
 	 { pcAt_At, 	 				vOk,						AT_NOMSG						}
 };
 /*-----------------------------------------------------------*/
@@ -171,6 +162,12 @@ static void vOk( unsigned portBASE_TYPE uxStrgIdx )
 	{
 		xComSendStringRAM( COM0, "\n\rOK\n\r" );
 	}
+	else
+	{
+		/* We got here because the parser detected an "AT". However, there were characters after the command
+		   which did not match any other command. So we return a syntax error. */
+		xComSendStringRAM( COM0, "\r\nERROR\r\n" );
+	}
 }
 /*-----------------------------------------------------------*/
 	
@@ -183,13 +180,38 @@ static void vOkNoEOLCheck( unsigned portBASE_TYPE uxStrgIdx )
 /*-----------------------------------------------------------*/
 	
 /* Return version string. */
-static void vSendVersion( unsigned portBASE_TYPE uxStrgIdx )
+static void vGetVersion( unsigned portBASE_TYPE uxStrgIdx )
 {
+	static char 		cFwVersion[] = "\r\n" VERSION ", FW=";
+	static char 		cFwVersion2[] = " " __DATE__ " " __TIME__ "\r\nOK\r\n";
+
 	/* Check, if the received string is terminated here. In this case, send the 'OK' response. */
 	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx ) == 0 )
 	{
-		xComSendStringRAM( COM0, VERSION "\r\nOK\r\n");
+		xComSendStringRAM( COM0, cFwVersion );
+		xComSendStringRAM( COM0, cGitVersion );
+		xComSendStringRAM( COM0, cFwVersion2 );
 	}
+}
+/*-----------------------------------------------------------*/
+	
+/* Return BT device address string. */
+static void vGetBTAddr( unsigned portBASE_TYPE uxStrgIdx )
+{
+	ble_gap_addr_t	xBleGapAddr;
+	char			cBtAddr[ 3 ];
+	portBASE_TYPE	xIdx;
+	
+	/* Retrieve BLE GAP address. */
+	sd_ble_gap_addr_get( &xBleGapAddr );
+
+	xComSendStringRAM( COM0, "\r\n+UMLA:" );
+	for ( xIdx = 0; xIdx < 6; xIdx++)
+	{
+		vByteToHexStrg( cBtAddr, xBleGapAddr.addr[ 5 - xIdx ] );
+		xComSendStringRAM( COM0, cBtAddr );
+	}
+	xComSendStringRAM( COM0, "\r\nOK\r\n" );	
 }
 /*-----------------------------------------------------------*/
 	
@@ -220,17 +242,12 @@ static void vSetAdvData( unsigned portBASE_TYPE uxStrgIdx )
 
 		/* Set the total payload length. */
 		xEncodedAdvDataLen = ( strlen( cLocalAdvData ) >> 1 ) + 3;
-		
-		/* Start advertising at 1Mbps. */
-		vStartAdvertising( ADV_STD1MBPS );
 	}
-	else
-	{
-		/* Stop advertising. */
-		vStopAdvertising();
-	}
+	
+	/* Restart advertising in the same state so that the new data gets correctly taken into account. */
+	vStartAdvertising( xGetAdvState() );
 
-	xComSendStringRAM( COM0, "OK\r\n");
+	xComSendStringRAM( COM0, "\r\nOK\r\n");
 }
 /*-----------------------------------------------------------*/
 	
@@ -243,7 +260,7 @@ static void vGetAdvData( unsigned portBASE_TYPE uxStrgIdx )
 	/* Check, if the received string is terminated here. In this case, treat the command. */
 	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
 	{
-		xComSendStringRAM( COM0, "+UBTAD:" );
+		xComSendStringRAM( COM0, "\r\n+UBTAD:" );
 		
 		for ( xChrIdx = 0; xChrIdx < xEncodedAdvDataLen; xChrIdx++ )
 		{
@@ -269,22 +286,54 @@ static void vSetAdvState( unsigned portBASE_TYPE uxStrgIdx )
 	}
 	else
 	{
-		vStartAdvertising( ucHexStrgToByte( &cSelection ) );
+		vStartAdvertising( cCharToNibble( cSelection ) );
 	}
+	xComSendStringRAM( COM0, "\r\nOK\r\n" );
 }
 /*-----------------------------------------------------------*/
 
 /* Get advertising state. */
 static void vGetAdvState( unsigned portBASE_TYPE uxStrgIdx )
 {
-	signed char		cRespStrg[ 10 ];
+	signed char		cRespStrg[ 24 ];
+	
 	/* Check, if the received string is terminated here. In this case, treat the command. */
 	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
 	{
-		sprintf( cRespStrg, "+UBTA:%i\r\n", xGetAdvState() );
+		sprintf( cRespStrg, "\r\n+UBTA:%i\r\nOK\r\n", xGetAdvState() );
 		xComSendStringRAM( COM0, cRespStrg );
-	}
+	}	
+}
+/*-----------------------------------------------------------*/
+
+/* Set scan mode. */
+static void vSetScanState( unsigned portBASE_TYPE uxStrgIdx )
+{
+	signed char			cSelection;
 	
+	cSelection = cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx );
+	
+	vStopScan();
+	
+	if ( cSelection != '0' )
+	{
+		vStartScan( cCharToNibble( cSelection ) );
+	}
+	xComSendStringRAM( COM0, "\r\nOK\r\n" );
+}
+/*-----------------------------------------------------------*/
+
+/* Get scan mode. */
+static void vGetScanState( unsigned portBASE_TYPE uxStrgIdx )
+{
+	signed char		cRespStrg[ 24 ];
+	
+	/* Check, if the received string is terminated here. In this case, treat the command. */
+	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
+	{
+		sprintf( cRespStrg, "\r\n+UBTS:%i\r\nOK\r\n", xGetScanState() );
+		xComSendStringRAM( COM0, cRespStrg );
+	}	
 }
 /*-----------------------------------------------------------*/
 
@@ -368,6 +417,11 @@ static portTASK_FUNCTION( vBleParserTask, pvParameters )
 						   TODO: log event. */
 					}
 				}
+			}
+			else
+			{
+				/* No match was found in the table. Return a syntax error. */
+				xComSendStringRAM( COM0, "\r\nERROR\r\n" );
 			}
 			
 			/* Remove the received string from the BLE UART RX ring buffer. */

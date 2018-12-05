@@ -25,6 +25,7 @@
 #include "nrf_sdh_freertos.h"
 #include "nrf_gpio.h"
 #include "nrf_pwr_mgmt.h"
+#include "nrf_temp.h"
 
 #include "bsp_btn_ble.h"
 
@@ -60,8 +61,8 @@
 /* Initialise the BLE task. */
 void vBleInit( void );
 
-/* Function to start scanning. */
-static void vScanStart( void * pvParameter );
+/* Startup function. */
+static void vStartUp( void * pvParameter );
 
 /* Function for handling BLE_GAP_ADV_REPORT events. */
 static void vOnAdvReport( ble_gap_evt_adv_report_t const *pxAdvReport );
@@ -76,17 +77,29 @@ static void vBleStackInit( void );
  * device including the device name and the preferred connection parameters. */
 static void vGapParamsInit( void );
 
-/* Timer callback for periodic BLE beacon scans. */
-void prvBleTimerCallback( TimerHandle_t xTimer );
-
 /* Start advertising. */
 void vStartAdvertising( portBASE_TYPE xNewAdvState );
 
 /* Stop advertising. */
-void StopAdvertising( void );
+void vStopAdvertising( void );
+
+/* Start advertising. */
+void vStartScan( portBASE_TYPE xNewScanState );
+
+/* Stop advertising. */
+void StopScan( void );
 
 /* Return advertising state. */
 portBASE_TYPE xGetAdvState( void );
+
+/* Return scan state. */
+portBASE_TYPE xGetScanState( void );
+
+/* Timer callback for periodic BLE beacon scans. */
+void prvBleAdvTimerCallback( TimerHandle_t xBleAdvTimer );
+
+/* Timer callback for periodic temperature sensor polling. */
+void prvTempTimerCallback( TimerHandle_t xTimer );
 
 /* The BLE advertising report handling task. */
 static portTASK_FUNCTION_PROTO( vBleAdHandlerTask, pvParameters );
@@ -96,16 +109,20 @@ static portTASK_FUNCTION_PROTO( vBleAdHandlerTask, pvParameters );
 /* UART Rx character ring buffer */
 signed char					cBleUartRxBuffer[ bleUART_RX_BUFFER_SIZE ];
 
-/* Timer handle for the BLE timer. */
-static TimerHandle_t 		xBleTimer;	
+/* Timer handle for the BLE advertising timer. */
+static TimerHandle_t 		xBleAdvTimer;	
+
+/* Timer handle for the temperature capture timer. */
+static TimerHandle_t 		xTemperatureTimer;	
 
 /* Buffer where advertising reports will be stored by the SoftDevice. */
 static uint8_t				cScanBufferData[ BLE_GAP_SCAN_BUFFER_EXTENDED_MIN ]; 
 
 /* Scan parameters requested for scanning and connection. */
-static ble_gap_scan_params_t const xScanParam =
+static ble_gap_scan_params_t xScanParam =
 {
-    .active        = 0x00,							/* Passive scan only. */
+	.extended      = 1,
+	.active        = 0x00,							/* Passive scan only. */
 	.interval      = SCAN_INTERVAL,
     .window        = SCAN_WINDOW,
     .timeout       = 0x0000,						/* No timeout. */
@@ -121,9 +138,14 @@ static ble_data_t			xScanBuffer =
 };
 
 /* Advertising state:
-		bit 0				1Mbps advertising
-		bit 1				125kbps advertising ongoing */
+		bit 0				1Mbps advertising configured
+		bit 2				125kbps advertising configured */
 static portBASE_TYPE		xAdvState;
+
+/* Current advertising mode (exclusive):
+		bit 0				1Mbps advertising ongoing
+		bit 2				125kbps advertising ongoing */
+static portBASE_TYPE		xAdvMode;
 
 /* Struct that contains pointers to the encoded advertising data. */
 static ble_gap_adv_data_t	xAdvData =
@@ -161,6 +183,11 @@ ble_gap_adv_params_t		xAdvParams =
 
 /* Handle for advertisement. */
 static uint8_t				xAdvHandle;
+
+/* Scan state:
+		bit 0				1Mbps scanning
+		bit 2				125kbps scanning */
+static portBASE_TYPE		xScanState;
 /*-----------------------------------------------------------*/
 
 /* Public variables. */
@@ -186,13 +213,24 @@ void vBleInit( void )
 	vCOMOpen( COM0, cBleUartRxBuffer );
 
 	/* Create advertisement timer. */
-	xBleTimer = xTimerCreate
+	xBleAdvTimer = xTimerCreate
 							( "",			 				/* Timer name for debug. */
-							  1,							/* BLE interval dummy; will be programmed when starting the timer. */
+							  ADV_INTERLEAVING_TIME	,		/* BLE switch rate between advertising modes. */
 							  pdTRUE,						/* Auto-reload. */
 							  ( void * )0,					/* Init for the ID / expiry count. */
-							  prvBleTimerCallback			/* Callback for the BLE timer. */
+							  prvBleAdvTimerCallback		/* Callback for the BLE timer. */
 							);
+	
+	/* Create temperature sensor timer. */
+	xTemperatureTimer = xTimerCreate
+							( "",			 				/* Timer name for debug. */
+							  TEMP_POLL_INTERVAL	,		/* BLE switch rate between advertising modes. */
+							  pdTRUE,						/* Auto-reload. */
+							  ( void * )0,					/* Init for the ID / expiry count. */
+							  prvTempTimerCallback		/* Callback for the BLE timer. */
+							);
+	
+	( void )xTimerStart( xTemperatureTimer, portMAX_DELAY );
 	
 	/* No advertisement data set yet. */
 	xEncodedAdvDataLen = 0;
@@ -200,27 +238,16 @@ void vBleInit( void )
 /*-----------------------------------------------------------*/
 
 /* 
- * Function to start scanning.
- * Scanning is started based on the internal parameters (global variables) set.
+ * Startup function.
  */
-static void vScanStart( void * pvParameter )
+static void vStartUp( void * pvParameter )
 {
 	ret_code_t xErrCode;
 
     ( void )pvParameter;
 	
-	/* If already scanning, stop scanning. */
-	( void )sd_ble_gap_scan_stop();
-   
-	/* Set the correct TX power. */
-	xErrCode = sd_ble_gap_tx_power_set( BLE_GAP_TX_POWER_ROLE_SCAN_INIT, NULL, OUTPUT_PWR_4_dBm );
-	APP_ERROR_CHECK( xErrCode );
- 
-	xErrCode = sd_ble_gap_scan_start( &xScanParam, &xScanBuffer );
-	APP_ERROR_CHECK( xErrCode );
-	
-	/* At this point the scheduler is running and the BLE stack initialised. */
-	xComSendStringRAM( COM0, "+STARTUP\r\n" );
+	xComSendStringRAM( COM0, "\r\n+STARTUP\r\n" );
+	NRF_LOG_FLUSH();
 }
 /*-----------------------------------------------------------*/
 
@@ -335,25 +362,18 @@ static void vBleStackInit( void )
     NRF_SDH_BLE_OBSERVER( m_ble_observer, APP_BLE_OBSERVER_PRIO, vBleEvtHandler, NULL );
 	
 	/* Set the device's advertiser address. To remain compatible with ublox devices containing connectivity software,
-	   we will set the upper 24bit to ublox manufacturer ID and generate the lower 24bit randomly. The address will
-	   be marked as random static as opposed to public. */
-	/* Initialise the random number generator. */
-    xErrCode = nrf_drv_rng_init( NULL );
-    APP_ERROR_CHECK( xErrCode );	   
-
-	do
-	{
-		nrf_drv_rng_bytes_available( &cRngBytesAvailable );
-	} while ( cRngBytesAvailable < 3 );
-    xErrCode = nrf_drv_rng_rand( xBleGapAddr.addr, 3 );
-    APP_ERROR_CHECK( xErrCode );
+	   we will set the upper 24bit to ublox manufacturer ID and take the lower 24bit from the the least significant 24-bit 
+	   of the (unique) device address. */	
+	xBleGapAddr.addr[0] = ( char )( ( NRF_FICR->DEVICEADDR[0] & 0x000000ff ) >>  0 );
+	xBleGapAddr.addr[1] = ( char )( ( NRF_FICR->DEVICEADDR[0] & 0x0000ff00 ) >>  8 );
+	xBleGapAddr.addr[2] = ( char )( ( NRF_FICR->DEVICEADDR[0] & 0x00ff0000 ) >> 16 );
 	
 	xErrCode = sd_ble_gap_addr_set( &xBleGapAddr );
     APP_ERROR_CHECK( xErrCode );
 	
     /* Create a FreeRTOS task to retrieve SoftDevice events. The first parameter is an optional pointer to a function
   	   to be executed */
-    nrf_sdh_freertos_init( vScanStart, NULL, SD_TASK_PRIORITY );	
+    nrf_sdh_freertos_init( vStartUp, NULL, SD_TASK_PRIORITY );	
 }
 /*-----------------------------------------------------------*/
 
@@ -365,8 +385,9 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 	
 	/* Configure the advertisement:
 	   Advertisement data is in xAdvData.
-	   Advertiser physical configuration is in xAdvParams.
-	   Returns the handle for the advertisement. */  
+	   Advertiser physical configuration is in xAdvParams. */
+	NRF_LOG_DEBUG( "Advertising mode set to %i.", xNewAdvState );	   
+	
 	/* Set the advertisement payload length. */
 	xAdvData.adv_data.len = xEncodedAdvDataLen; 
 	if ( ( xEncodedAdvDataLen > 31 ) || ( xNewAdvState & ADV_LR125KBPS ) )
@@ -381,42 +402,59 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 		xAdvParams.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
 	}
 	/* Set the advertising PHY and TX power as required. */
-	if ( xNewAdvState & ADV_LR125KBPS )
+	if ( xNewAdvState == ADV_LR125KBPS )
 	{
-		/* Long Range: Set the PHY to 125kbps. */
+		/* Long Range only: Set the PHY to 125kbps. */
 		xAdvParams.primary_phy = BLE_GAP_PHY_CODED;
 		xAdvParams.secondary_phy = BLE_GAP_PHY_CODED;
 		cTxPower = cTxPower125kbps;		
+		xAdvMode = ADV_LR125KBPS;
 	}
 	else
 	{
-		/* Standard advertising: the the advertising PHY to 1Mbps. */
-		xAdvParams.primary_phy = BLE_GAP_PHY_1MBPS;
-		xAdvParams.secondary_phy = BLE_GAP_PHY_1MBPS;
-		cTxPower = cTxPower1Mbps;		
+		if ( xNewAdvState & ADV_STD1MBPS )
+		{
+			/* In case standard advertising is set alone or combined with long range, star with the advertising 1Mbps PHY. */
+			xAdvParams.primary_phy = BLE_GAP_PHY_1MBPS;
+			xAdvParams.secondary_phy = BLE_GAP_PHY_1MBPS;
+			cTxPower = cTxPower1Mbps;	
+			xAdvMode = ADV_STD1MBPS;
+		}
 	}
-	xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
-	APP_ERROR_CHECK( xErrCode );
-	
-		
-	/* Set the output power. */
-	xErrCode = sd_ble_gap_tx_power_set( BLE_GAP_TX_POWER_ROLE_ADV, xAdvHandle, OUTPUT_PWR_4_dBm );
-	APP_ERROR_CHECK( xErrCode );
 
-	/* Start the advertising. BLE_CONN_CFG_TAG_DEFAULT is ignored as this is non-connectable advertising. */
-	xErrCode = sd_ble_gap_adv_start( xAdvHandle, BLE_CONN_CFG_TAG_DEFAULT );
-	APP_ERROR_CHECK( xErrCode );
+	/* Start the BLE advertising timer. On expiry, the timer switch between LR and sort range advertising. */
+	( void )xTimerStart( xBleAdvTimer, portMAX_DELAY );	
+
+	/* Stop any ongoing advertising before starting another with different parameters. */
+	( void ) sd_ble_gap_adv_stop( xAdvHandle );
 	
-	xAdvState = ADV_STD1MBPS;
+	xAdvState = xNewAdvState;
+
+	if ( xNewAdvState != ADV_NONE )
+	{
+		// TODO: Catch error and return error as AT event. An error could mean tha tthe advertising data is bad.
+		xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
+		APP_ERROR_CHECK( xErrCode );	
+		
+		/* Set the output power. */
+		xErrCode = sd_ble_gap_tx_power_set( BLE_GAP_TX_POWER_ROLE_ADV, xAdvHandle, cTxPower );
+		APP_ERROR_CHECK( xErrCode );
+
+		/* Start the advertising. BLE_CONN_CFG_TAG_DEFAULT is ignored as this is non-connectable advertising. */
+		xErrCode = sd_ble_gap_adv_start( xAdvHandle, BLE_CONN_CFG_TAG_DEFAULT );
+		APP_ERROR_CHECK( xErrCode );	
+	}
 }
 /*-----------------------------------------------------------*/
 
 /* Stop advertising. */
 void vStopAdvertising( void )
 {
-  ( void )sd_ble_gap_adv_stop( xAdvHandle );
+	NRF_LOG_DEBUG( "Advertising stopped." );	   
+	( void )xTimerStop( xBleAdvTimer, portMAX_DELAY );		
+	( void )sd_ble_gap_adv_stop( xAdvHandle );
   
-  xAdvState = 0;
+  xAdvState = ADV_NONE;
 }
 /*-----------------------------------------------------------*/
 
@@ -426,12 +464,123 @@ portBASE_TYPE xGetAdvState( void )
 }
 /*-----------------------------------------------------------*/
 
+/* Start scanning with the given parameter. */
+void vStartScan( portBASE_TYPE xNewScanState )
+{
+	ret_code_t xErrCode;
+	
+	NRF_LOG_DEBUG( "Scanning mode set to %i.", xNewScanState );	   
+	
+	xScanParam.scan_phys = 0;
+	
+	if ( xNewScanState & SCAN_STD1MBPS )
+	{
+		xScanParam.scan_phys |= BLE_GAP_PHY_1MBPS;
+	}
+	if ( xNewScanState & SCAN_LR125KBPS )
+	{
+		xScanParam.scan_phys |= BLE_GAP_PHY_CODED;
+	}
+	
+	/* If already scanning, stop scanning. */
+	( void )sd_ble_gap_scan_stop();
+   
+	/* Start scanning. */
+	xErrCode = sd_ble_gap_scan_start( &xScanParam, &xScanBuffer );
+	APP_ERROR_CHECK( xErrCode );
+	
+	xScanState = xNewScanState;
+}
+/*-----------------------------------------------------------*/
+
+/* Stop scanning. */
+void vStopScan( void )
+{
+	/* Stop scanning. */
+	NRF_LOG_DEBUG( "Scanning stopped." );	   
+	( void )sd_ble_gap_scan_stop();
+	
+	xScanState = SCAN_NONE;
+}
+/*-----------------------------------------------------------*/
+
+portBASE_TYPE xGetScanState( void )
+{
+	return xScanState;
+}
+/*-----------------------------------------------------------*/
 
 /* Timer callback for periodic BLE beacon scans. 
    CAUTION: This function is running in the timer task!
 */
-void prvBleTimerCallback( TimerHandle_t xTimer )
+void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 {
+	ret_code_t	xErrCode;
+	int8_t		cTxPower;
+
 	( void )xTimer;
+	
+	/* Test for concurrent standard / long range advertising requirement. */
+	if ( xAdvState == ( ADV_STD1MBPS | ADV_LR125KBPS ) )
+	{
+		/* Switch between modes. */
+		if ( xAdvMode == ADV_STD1MBPS )
+		{
+			/* switch to LR. */
+			NRF_LOG_DEBUG( "Advertising switched to long range." );	   
+			xAdvParams.primary_phy = BLE_GAP_PHY_CODED;
+			xAdvParams.secondary_phy = BLE_GAP_PHY_CODED;
+			cTxPower = cTxPower125kbps;		
+			xAdvMode = ADV_LR125KBPS;
+		}
+		else
+		{
+			/* Switch to standard. */
+			NRF_LOG_DEBUG( "Advertising switched to 1Mbps." );	   
+			xAdvParams.primary_phy = BLE_GAP_PHY_1MBPS;
+			xAdvParams.secondary_phy = BLE_GAP_PHY_1MBPS;
+			cTxPower = cTxPower1Mbps;	
+			xAdvMode = ADV_STD1MBPS;
+		}
+		
+		/* Stop any ongoing advertising before starting another with different parameters. */
+		( void ) sd_ble_gap_adv_stop( xAdvHandle );
+	
+		// TODO: Catch error and return error as AT event. An error could mean tha tthe advertising data is bad.
+		xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
+		APP_ERROR_CHECK( xErrCode );	
+		
+		/* Set the output power. */
+		xErrCode = sd_ble_gap_tx_power_set( BLE_GAP_TX_POWER_ROLE_ADV, xAdvHandle, cTxPower );
+		APP_ERROR_CHECK( xErrCode );
+
+		/* Start the advertising. BLE_CONN_CFG_TAG_DEFAULT is ignored as this is non-connectable advertising. */
+		xErrCode = sd_ble_gap_adv_start( xAdvHandle, BLE_CONN_CFG_TAG_DEFAULT );
+		APP_ERROR_CHECK( xErrCode );	
+		NRF_LOG_FLUSH();
+	}	
 }
 /*-----------------------------------------------------------*/
+
+/* Timer callback for periodic temperature sensor polling. 
+   CAUTION: This function is running in the timer task!
+*/
+void prvTempTimerCallback( TimerHandle_t xTimer )
+{
+    // This function contains workaround for PAN_028 rev2.0A anomalies 28, 29,30 and 31.
+    int32_t				temp;
+	int32_t				temperature;
+	ret_code_t			xErrCode;
+	char				cResStrg[ 20 ];
+	
+	( void )xTimer;
+	
+	/* Read temperature sensor. */
+	sd_temp_get( &temp );
+	temperature = ( 10 * temp ) / 4.0;
+
+	sprintf( cResStrg, "\r\n+UTEMP:%.i.%i\r\n", ( int )( temperature / 10 ), temperature - ( 10 * ( int )( temperature / 10 ) ) );
+	xComSendStringRAM( COM0, cResStrg );
+}
+/*-----------------------------------------------------------*/
+		
