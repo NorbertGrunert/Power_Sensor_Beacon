@@ -182,7 +182,11 @@ static void vOkNoEOLCheck( unsigned portBASE_TYPE uxStrgIdx )
 /* Return version string. */
 static void vGetVersion( unsigned portBASE_TYPE uxStrgIdx )
 {
-	static char 		cFwVersion[] = "\r\n" VERSION ", FW=";
+	#ifdef DEBUG
+		static char 		cFwVersion[] = "\r\n" VERSION ", DBG, FW=";
+	#else
+		static char 		cFwVersion[] = "\r\n" VERSION ", REL, FW=";
+	#endif
 	static char 		cFwVersion2[] = " " __DATE__ " " __TIME__ "\r\nOK\r\n";
 
 	/* Check, if the received string is terminated here. In this case, send the 'OK' response. */
