@@ -83,8 +83,10 @@ extern portBASE_TYPE xGetScanState( void );
 extern QueueHandle_t 		xBleCmdQueue; 
 
 /* Advertising data. */
-extern signed char			cEncodedAdvData[];
-extern portBASE_TYPE		xEncodedAdvDataLen;
+extern signed char			cEncodedStd1MbpsAdvData[ 100 ];
+extern portBASE_TYPE		xEncodedStd1MbpsAdvDataLen;
+extern signed char			cEncodedLR125kbpsAdvData[ 256 ];
+extern portBASE_TYPE		xEncodedLR125kbpsAdvDataLen;
 
 /* Configured output power in different modes. */
 extern uint8_t				cTxPower1Mbps;

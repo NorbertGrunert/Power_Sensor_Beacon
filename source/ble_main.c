@@ -152,7 +152,7 @@ static ble_gap_adv_data_t	xAdvData =
 {
     .adv_data =
     {
-        .p_data = cEncodedAdvData,
+        .p_data = cEncodedStd1MbpsAdvData,
         .len    = BLE_GAP_ADV_SET_DATA_SIZE_MAX
     },
     .scan_rsp_data =
@@ -193,8 +193,10 @@ static portBASE_TYPE		xScanState;
 /* Public variables. */
 
 /* Advertising data. */
-signed char					cEncodedAdvData[ 100 ];
-portBASE_TYPE				xEncodedAdvDataLen;
+signed char					cEncodedStd1MbpsAdvData[ 100 ];
+portBASE_TYPE				xEncodedStd1MbpsAdvDataLen;
+signed char					cEncodedLR125kbpsAdvData[ 256 ];
+portBASE_TYPE				xEncodedLR125kbpsAdvDataLen;
 
 /* Configured output power in different modes. */
 uint8_t						cTxPower1Mbps;
@@ -233,7 +235,8 @@ void vBleInit( void )
 	( void )xTimerStart( xTemperatureTimer, portMAX_DELAY );
 	
 	/* No advertisement data set yet. */
-	xEncodedAdvDataLen = 0;
+	xEncodedStd1MbpsAdvDataLen = 0;
+	xEncodedLR125kbpsAdvDataLen = 0;
 }
 /*-----------------------------------------------------------*/
 
@@ -388,19 +391,6 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 	   Advertiser physical configuration is in xAdvParams. */
 	NRF_LOG_DEBUG( "Advertising mode set to %i.", xNewAdvState );	   
 	
-	/* Set the advertisement payload length. */
-	xAdvData.adv_data.len = xEncodedAdvDataLen; 
-	if ( ( xEncodedAdvDataLen > 31 ) || ( xNewAdvState & ADV_LR125KBPS ) )
-	{
-		/* The payload length exceeds the capacity of a standard packet or long range is required. 
-		   Use extended advertising. */
-		xAdvParams.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
-	}
-	else
-	{
-		/* Use standard advertising. */
-		xAdvParams.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
-	}
 	/* Set the advertising PHY and TX power as required. */
 	if ( xNewAdvState == ADV_LR125KBPS )
 	{
@@ -409,16 +399,35 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 		xAdvParams.secondary_phy = BLE_GAP_PHY_CODED;
 		cTxPower = cTxPower125kbps;		
 		xAdvMode = ADV_LR125KBPS;
+		xAdvData.adv_data.p_data = cEncodedLR125kbpsAdvData;
+		xAdvData.adv_data.len = xEncodedLR125kbpsAdvDataLen; 
+		
+		/* For long range, always Use extended advertising. */
+		xAdvParams.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
 	}
 	else
 	{
 		if ( xNewAdvState & ADV_STD1MBPS )
 		{
-			/* In case standard advertising is set alone or combined with long range, star with the advertising 1Mbps PHY. */
+			/* In case standard advertising is set alone or combined with long range, start with the advertising 1Mbps PHY. */
 			xAdvParams.primary_phy = BLE_GAP_PHY_1MBPS;
 			xAdvParams.secondary_phy = BLE_GAP_PHY_1MBPS;
 			cTxPower = cTxPower1Mbps;	
 			xAdvMode = ADV_STD1MBPS;
+			xAdvData.adv_data.p_data = cEncodedStd1MbpsAdvData;
+			xAdvData.adv_data.len = xEncodedStd1MbpsAdvDataLen; 
+		
+			if ( xEncodedStd1MbpsAdvDataLen > 31 )
+			{
+				/* The payload length exceeds the capacity of a standard packet or long range is required. 
+				   Use extended advertising. */
+				xAdvParams.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+			}
+			else
+			{
+				/* Use standard advertising. */
+				xAdvParams.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+			}		
 		}
 	}
 
@@ -530,6 +539,11 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 			NRF_LOG_DEBUG( "Advertising switched to long range." );	   
 			xAdvParams.primary_phy = BLE_GAP_PHY_CODED;
 			xAdvParams.secondary_phy = BLE_GAP_PHY_CODED;
+			xAdvParams.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+			xAdvData.adv_data.p_data = cEncodedLR125kbpsAdvData;
+			xAdvData.adv_data.len = xEncodedLR125kbpsAdvDataLen; 
+		
+			/* For long range, always Use extended advertising. */
 			cTxPower = cTxPower125kbps;		
 			xAdvMode = ADV_LR125KBPS;
 		}
@@ -539,6 +553,20 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 			NRF_LOG_DEBUG( "Advertising switched to 1Mbps." );	   
 			xAdvParams.primary_phy = BLE_GAP_PHY_1MBPS;
 			xAdvParams.secondary_phy = BLE_GAP_PHY_1MBPS;
+			xAdvData.adv_data.p_data = cEncodedStd1MbpsAdvData;
+			xAdvData.adv_data.len = xEncodedStd1MbpsAdvDataLen; 
+			
+			if ( xEncodedStd1MbpsAdvDataLen > 31 )
+			{
+				/* The payload length exceeds the capacity of a standard packet or long range is required. 
+				   Use extended advertising. */
+				xAdvParams.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+			}
+			else
+			{
+				/* Use standard advertising. */
+				xAdvParams.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+			}		
 			cTxPower = cTxPower1Mbps;	
 			xAdvMode = ADV_STD1MBPS;
 		}
@@ -546,7 +574,7 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 		/* Stop any ongoing advertising before starting another with different parameters. */
 		( void ) sd_ble_gap_adv_stop( xAdvHandle );
 	
-		// TODO: Catch error and return error as AT event. An error could mean tha tthe advertising data is bad.
+		// TODO: Catch error and return error as AT event. An error could mean that the advertising data is bad.
 		xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
 		APP_ERROR_CHECK( xErrCode );	
 		

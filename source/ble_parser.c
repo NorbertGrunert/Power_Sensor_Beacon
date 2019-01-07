@@ -52,10 +52,14 @@ static void vOkNoEOLCheck( unsigned portBASE_TYPE uxStrgIdx );
 static void vGetVersion( unsigned portBASE_TYPE uxStrgIdx );
 /* Return device address string. */
 static void vGetBTAddr( unsigned portBASE_TYPE uxStrgIdx );
-/* Set advertising data. */
-static void vSetAdvData( unsigned portBASE_TYPE uxStrgIdx );
-/* Get advertising data. */
-static void vGetAdvData( unsigned portBASE_TYPE uxStrgIdx );
+/* Set short range advertising data. */
+static void vSetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx );
+/* Get short range advertising data. */
+static void vGetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx );
+/* Set long range advertising data. */
+static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx );
+/* Get long range advertising data. */
+static void vGetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx );
 /* Set advertising state. */
 static void vSetAdvState( unsigned portBASE_TYPE uxStrgIdx );
 /* Get advertising state. */
@@ -77,8 +81,10 @@ QueueHandle_t 			xBleParserAtCmdQueue; 	/* BLE AT response indicator queue handl
 char pcAt_At[] 			= "AT";	
 char pcAt_I9[] 			= "ATI9";	
 char pcAt_UMLa[]		= "AT+UMLA?";	
-char pcAt_UBtAd[] 		= "AT+UBTAD=";	
-char pcAt_UBtAdQ[] 		= "AT+UBTAD?";	
+char pcAt_UBtAdS[]		= "AT+UBTADS=";	
+char pcAt_UBtAdSQ[]		= "AT+UBTADS?";	
+char pcAt_UBtAdL[]		= "AT+UBTADL=";	
+char pcAt_UBtAdLQ[]		= "AT+UBTADL?";	
 char pcAt_UBtA[]		= "AT+UBTA=";
 char pcAt_UBtAQ[]		= "AT+UBTA?";
 char pcAt_UBtS[]		= "AT+UBTS=";
@@ -90,8 +96,10 @@ static const struct xAT_CMD xAtCmd[] =
 {
 	 { pcAt_I9, 	 				vGetVersion,				AT_NOMSG						},
 	 { pcAt_UMLa, 	 				vGetBTAddr,					AT_NOMSG						},
-	 { pcAt_UBtAd, 	 				vSetAdvData,				AT_NOMSG						},
-	 { pcAt_UBtAdQ,	 				vGetAdvData,				AT_NOMSG						},
+	 { pcAt_UBtAdS,  				vSetStd1MbpsAdvData,		AT_NOMSG						},
+	 { pcAt_UBtAdSQ, 				vGetStd1MbpsAdvData,		AT_NOMSG						},
+	 { pcAt_UBtAdL,  				vSetLR125kbpsAdvData,		AT_NOMSG						},
+	 { pcAt_UBtAdLQ, 				vGetLR125kbpsAdvData,		AT_NOMSG						},
 	 { pcAt_UBtA,	 				vSetAdvState,				AT_NOMSG						},
 	 { pcAt_UBtAQ,	 				vGetAdvState,				AT_NOMSG						},
 	 { pcAt_UBtS,	 				vSetScanState,				AT_NOMSG						},
@@ -183,9 +191,9 @@ static void vOkNoEOLCheck( unsigned portBASE_TYPE uxStrgIdx )
 static void vGetVersion( unsigned portBASE_TYPE uxStrgIdx )
 {
 	#ifdef DEBUG
-		static char 		cFwVersion[] = "\r\n" VERSION ", DBG, FW=";
+		static char 		cFwVersion[] = "\r\n" VERSION "-DBG FW=";
 	#else
-		static char 		cFwVersion[] = "\r\n" VERSION ", REL, FW=";
+		static char 		cFwVersion[] = "\r\n" VERSION "-REL FW=";
 	#endif
 	static char 		cFwVersion2[] = " " __DATE__ " " __TIME__ "\r\nOK\r\n";
 
@@ -219,10 +227,10 @@ static void vGetBTAddr( unsigned portBASE_TYPE uxStrgIdx )
 }
 /*-----------------------------------------------------------*/
 	
-/* Set advertising data.
+/* Set short range advertising data.
    Setting the advertisement data will also start advertising. 
    Setting the advertisement data to a string of length 0 will stop advertising. */
-static void vSetAdvData( unsigned portBASE_TYPE uxStrgIdx )
+static void vSetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 {
 	signed char 		cLocalAdvData[ 129 ];
 	portBASE_TYPE		xChrIdx;
@@ -236,16 +244,16 @@ static void vSetAdvData( unsigned portBASE_TYPE uxStrgIdx )
 		   Leave space for the advertisement flag field (requires 3 bytes). */
 		for ( xChrIdx = 0; xChrIdx < strlen( cLocalAdvData ); xChrIdx += 2 )
 		{
-			cEncodedAdvData[ ( xChrIdx >> 1 ) + 3 ] = ucHexStrgToByte( cLocalAdvData + xChrIdx );
+			cEncodedStd1MbpsAdvData[ ( xChrIdx >> 1 ) + 3 ] = ucHexStrgToByte( cLocalAdvData + xChrIdx );
 		}
 	
 		/* Add the default advertising flags in the payload. */
-		cEncodedAdvData[ 0 ] = 0x02;			/* AD length: 2 bytes. */
-		cEncodedAdvData[ 1 ] = 0x01;			/* AD Type: 1 = advertiser flags. */
-		cEncodedAdvData[ 2 ] = 0x04;			/* AD Flag value: not discoverable, BR/EDR not supported. */
+		cEncodedStd1MbpsAdvData[ 0 ] = 0x02;			/* AD length: 2 bytes. */
+		cEncodedStd1MbpsAdvData[ 1 ] = 0x01;			/* AD Type: 1 = advertiser flags. */
+		cEncodedStd1MbpsAdvData[ 2 ] = 0x04;			/* AD Flag value: not discoverable, BR/EDR not supported. */
 
 		/* Set the total payload length. */
-		xEncodedAdvDataLen = ( strlen( cLocalAdvData ) >> 1 ) + 3;
+		xEncodedStd1MbpsAdvDataLen = ( strlen( cLocalAdvData ) >> 1 ) + 3;
 	}
 	
 	/* Restart advertising in the same state so that the new data gets correctly taken into account. */
@@ -255,8 +263,8 @@ static void vSetAdvData( unsigned portBASE_TYPE uxStrgIdx )
 }
 /*-----------------------------------------------------------*/
 	
-/* Get advertising data. */
-static void vGetAdvData( unsigned portBASE_TYPE uxStrgIdx )
+/* Get short range advertising data. */
+static void vGetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 {
 	portBASE_TYPE		xChrIdx;
 	signed char			cOctetStrg[ 3 ];
@@ -266,9 +274,67 @@ static void vGetAdvData( unsigned portBASE_TYPE uxStrgIdx )
 	{
 		xComSendStringRAM( COM0, "\r\n+UBTAD:" );
 		
-		for ( xChrIdx = 0; xChrIdx < xEncodedAdvDataLen; xChrIdx++ )
+		for ( xChrIdx = 0; xChrIdx < xEncodedStd1MbpsAdvDataLen; xChrIdx++ )
 		{
-			vByteToHexStrg( cOctetStrg, cEncodedAdvData[ xChrIdx ] );
+			vByteToHexStrg( cOctetStrg, cEncodedStd1MbpsAdvData[ xChrIdx ] );
+			xComSendStringRAM( COM0, cOctetStrg );
+		}
+		
+		xComSendStringRAM( COM0, "\r\nOK\r\n" );
+	}
+}
+/*-----------------------------------------------------------*/
+	
+/* Set long range advertising data.
+   Setting the advertisement data will also start advertising. 
+   Setting the advertisement data to a string of length 0 will stop advertising. */
+static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
+{
+	signed char 		cLocalAdvData[ 129 ];
+	portBASE_TYPE		xChrIdx;
+	
+	/* Copy the advertisement data to local buffer (HEX format, max. 64 bytes). */
+	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 128 );
+	
+	if ( strlen( cLocalAdvData ) > 0 )
+	{
+		/* Convert to binary and store in global advertisement data buffer. 
+		   Leave space for the advertisement flag field (requires 3 bytes). */
+		for ( xChrIdx = 0; xChrIdx < strlen( cLocalAdvData ); xChrIdx += 2 )
+		{
+			cEncodedLR125kbpsAdvData[ ( xChrIdx >> 1 ) + 3 ] = ucHexStrgToByte( cLocalAdvData + xChrIdx );
+		}
+	
+		/* Add the default advertising flags in the payload. */
+		cEncodedLR125kbpsAdvData[ 0 ] = 0x02;			/* AD length: 2 bytes. */
+		cEncodedLR125kbpsAdvData[ 1 ] = 0x01;			/* AD Type: 1 = advertiser flags. */
+		cEncodedLR125kbpsAdvData[ 2 ] = 0x04;			/* AD Flag value: not discoverable, BR/EDR not supported. */
+
+		/* Set the total payload length. */
+		xEncodedLR125kbpsAdvDataLen = ( strlen( cLocalAdvData ) >> 1 ) + 3;
+	}
+	
+	/* Restart advertising in the same state so that the new data gets correctly taken into account. */
+	vStartAdvertising( xGetAdvState() );
+
+	xComSendStringRAM( COM0, "\r\nOK\r\n");
+}
+/*-----------------------------------------------------------*/
+	
+/* Get long range advertising data. */
+static void vGetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
+{
+	portBASE_TYPE		xChrIdx;
+	signed char			cOctetStrg[ 3 ];
+	
+	/* Check, if the received string is terminated here. In this case, treat the command. */
+	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
+	{
+		xComSendStringRAM( COM0, "\r\n+UBTAD:" );
+		
+		for ( xChrIdx = 0; xChrIdx < xEncodedLR125kbpsAdvDataLen; xChrIdx++ )
+		{
+			vByteToHexStrg( cOctetStrg, cEncodedLR125kbpsAdvData[ xChrIdx ] );
 			xComSendStringRAM( COM0, cOctetStrg );
 		}
 		
