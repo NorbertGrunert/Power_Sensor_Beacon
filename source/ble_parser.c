@@ -195,7 +195,7 @@ static void vGetVersion( unsigned portBASE_TYPE uxStrgIdx )
 	#else
 		static char 		cFwVersion[] = "\r\n" VERSION "-REL FW=";
 	#endif
-	static char 		cFwVersion2[] = " " __DATE__ " " __TIME__ "\r\nOK\r\n";
+	static char 		cFwVersion2[] = "\r\nOK\r\n";
 
 	/* Check, if the received string is terminated here. In this case, send the 'OK' response. */
 	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx ) == 0 )
