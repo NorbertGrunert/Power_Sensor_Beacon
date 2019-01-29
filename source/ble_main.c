@@ -264,35 +264,47 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 	ble_gap_evt_t const			*pxGapEvt = &pxBleEvt->evt.gap_evt;
 	ble_gap_evt_adv_report_t	xAdvReport = pxGapEvt->params.adv_report;
 	static int8_t				cRssiValue = 0;
-	const char					uUbloxAddr[]  = { 0x6E, 0xCA, 0xD4 };
-	const char					cRadiusAddr[] = { 0xEE, 0xF3, 0x0C };   
+	const char					uTLSignature[]  = { 0xFF, 0x17, 0x00 };
+	const char					cRadiusSignature[] = { 0x1B, 0xFF, 0x18, 0x01 };   
 	bool						bAdvReportUblox; 		
 	bool						bAdvReportRadius;		
 	char						cAdvReportStrg[ 100 ];
 	char						*pcAdvReportStrg;
+	char						cAddrType;
 
     switch ( pxBleEvt->header.evt_id )
     {
         case BLE_GAP_EVT_ADV_REPORT:
 		
 			/* Check if the adv report is sent from one of the recognised devices. */
-			bAdvReportUblox  = ( strncmp(  uUbloxAddr, xAdvReport.peer_addr.addr + 3, 3 ) == 0 );
-			bAdvReportRadius = ( strncmp( cRadiusAddr, xAdvReport.peer_addr.addr + 3, 3 ) == 0 );
+			bAdvReportUblox  = ( strncmp(     uTLSignature, xAdvReport.data.p_data + 4, 3 ) == 0 );
+			bAdvReportRadius = ( strncmp( cRadiusSignature, xAdvReport.data.p_data + 3, 4 ) == 0 );
 
 			 if ( ( bAdvReportUblox  == true ) ||
 				  ( bAdvReportRadius == true ) )
 			 {   
 				cRssiValue = xAdvReport.rssi;
+
+				switch (xAdvReport.peer_addr.addr_type)
+				{
+					case BLE_GAP_ADDR_TYPE_PUBLIC:							cAddrType = 'p'; break;
+					case BLE_GAP_ADDR_TYPE_RANDOM_STATIC:					cAddrType = 'r'; break;
+					case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE :		cAddrType = 's'; break;
+					case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE:	cAddrType = 'n'; break;
+					case BLE_GAP_ADDR_TYPE_ANONYMOUS:						cAddrType = 'a'; break;
+					default:												cAddrType = 'u'; break;
+				}
 		
 				/* Create a fake ublox scan report. */
 				pcAdvReportStrg = cAdvReportStrg;
-				pcAdvReportStrg += sprintf( pcAdvReportStrg, "+UBTD:%02X%02X%02X%02X%02X%02Xp,%2.2d,\"\",2,",
+				pcAdvReportStrg += sprintf( pcAdvReportStrg, "+UBTD:%02X%02X%02X%02X%02X%02X%c,%2.2d,\"\",2,",
 											xAdvReport.peer_addr.addr[ 5 ],
 											xAdvReport.peer_addr.addr[ 4 ],
 											xAdvReport.peer_addr.addr[ 3 ],
 											xAdvReport.peer_addr.addr[ 2 ],
 											xAdvReport.peer_addr.addr[ 1 ],
 											xAdvReport.peer_addr.addr[ 0 ],
+											cAddrType,
 											cRssiValue );
 
 				/* Append the advertising data unless ble_gap_adv_report_type_t::status is set to BLE_GAP_ADV_DATA_STATUS_INCOMPLETE_MORE_DATA */
