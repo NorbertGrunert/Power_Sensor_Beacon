@@ -357,8 +357,8 @@ static void vBleStackInit( void )
 	uint8_t			cRngBytesAvailable;
 	
 	/* Initialise the output power to default values. */
-	cTxPower1Mbps = OUTPUT_PWR_4_dBm;
-	cTxPower125kbps = OUTPUT_PWR_4_dBm;
+	cTxPower1Mbps = OUTPUT_PWR_6_dBm;
+	cTxPower125kbps = OUTPUT_PWR_6_dBm;
  
     xErrCode = nrf_sdh_enable_request();
     APP_ERROR_CHECK( xErrCode );
@@ -447,7 +447,7 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 	( void )xTimerStart( xBleAdvTimer, portMAX_DELAY );	
 
 	/* Stop any ongoing advertising before starting another with different parameters. */
-	( void ) sd_ble_gap_adv_stop( xAdvHandle );
+	( void )sd_ble_gap_adv_stop( xAdvHandle );
 	
 	xAdvState = xNewAdvState;
 
