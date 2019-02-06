@@ -25,7 +25,7 @@
 #define OP_QUEUES_SIZE          3
 #define APP_TIMER_PRESCALER     NRF_SERIAL_APP_TIMER_PRESCALER
 
-#define uartRX_BUFFER_SIZE		128							/* size in items: max. length of one AT frame + max. number of rx-chars. during one tick */
+#define uartRX_BUFFER_SIZE		350							/* size in items: max. length of one AT frame + max. number of rx-chars. during one tick */
 #define uartTX_BLOCKTIME		( ( TickType_t ) ( 50 / portTICK_RATE_MS ) )	/* wait max. 50ms for TX queue to become available. One character takes about 2ms to send @4800bps. */
 
 

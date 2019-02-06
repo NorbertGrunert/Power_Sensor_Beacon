@@ -48,7 +48,7 @@ signed portBASE_TYPE	vUartRxISR( struct nrf_serial_s const * p_serial, struct CO
 // /*-----------------------------------------------------------*/
 
 /* Module scope variables */
-struct COM_PORT	xCom[NUM_COMS];						/* Array of structures containing all variables for all supported UARTs. */
+struct COM_PORT	xCom[ NUM_COMS ];				/* Array of structures containing all variables for all supported UARTs. */
 
 NRF_SERIAL_DRV_UART_CONFIG_DEF( mDrvConfigCom0,
 							    RX_PIN_NUMBER, TX_PIN_NUMBER,
@@ -57,8 +57,8 @@ NRF_SERIAL_DRV_UART_CONFIG_DEF( mDrvConfigCom0,
 							    NRF_UART_BAUDRATE_38400,
 							    UART_DEFAULT_CONFIG_IRQ_PRIORITY );
 
-#define SERIAL_FIFO_TX_SIZE 300					/* Allow for enough space in the TX buffer to accomodate 3 scan reports. */
-#define SERIAL_FIFO_RX_SIZE 100					/* Allow for enough space in the RX buffer to accomodate 1 advertisement packet. */
+#define SERIAL_FIFO_TX_SIZE 900					/* Allow for enough space in the TX buffer to accomodate 3 scan reports. */
+#define SERIAL_FIFO_RX_SIZE 300					/* Allow for enough space in the RX buffer to accomodate 1 advertisement packet. */
 
 NRF_SERIAL_QUEUES_DEF( serialQueuesCom0, SERIAL_FIFO_TX_SIZE, SERIAL_FIFO_RX_SIZE );
 

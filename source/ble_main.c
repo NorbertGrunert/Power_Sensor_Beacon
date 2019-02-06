@@ -195,7 +195,7 @@ static portBASE_TYPE		xScanState;
 /* Advertising data. */
 signed char					cEncodedStd1MbpsAdvData[ 100 ];
 portBASE_TYPE				xEncodedStd1MbpsAdvDataLen;
-signed char					cEncodedLR125kbpsAdvData[ 256 ];
+signed char					cEncodedLR125kbpsAdvData[ 257 ];
 portBASE_TYPE				xEncodedLR125kbpsAdvDataLen;
 
 /* Configured output power in different modes. */
@@ -268,7 +268,7 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 	const char					cRadiusSignature[] = { 0x1B, 0xFF, 0x18, 0x01 };   
 	bool						bAdvReportUblox; 		
 	bool						bAdvReportRadius;		
-	char						cAdvReportStrg[ 100 ];
+	char						cAdvReportStrg[ 257 ];
 	char						*pcAdvReportStrg;
 	char						cAddrType;
 

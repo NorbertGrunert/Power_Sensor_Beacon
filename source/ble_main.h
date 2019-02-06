@@ -13,7 +13,7 @@
 #include "semphr.h"
 
 /* Size of the GSM UART Rx ring buffer. */
-#define	bleUART_RX_BUFFER_SIZE	( 150 )
+#define	bleUART_RX_BUFFER_SIZE			150
 
 /* Tag that refers to the BLE stack configuration. */
 #define APP_BLE_CONN_CFG_TAG            1 		
@@ -49,9 +49,6 @@
 /* SCAN_WINDOW - Scanning window, determines scan window in units of 0.625 millisecond. */
 #define SCAN_WINDOW 					160
 
-#define PHY_1M_PHY						0
-#define PHY_CODED						1
-
 /* Temperature poll interval. */
 #define TEMP_POLL_INTERVAL				20 * portTICKS_PER_SEC
 
@@ -85,7 +82,7 @@ extern QueueHandle_t 		xBleCmdQueue;
 /* Advertising data. */
 extern signed char			cEncodedStd1MbpsAdvData[ 100 ];
 extern portBASE_TYPE		xEncodedStd1MbpsAdvDataLen;
-extern signed char			cEncodedLR125kbpsAdvData[ 256 ];
+extern signed char			cEncodedLR125kbpsAdvData[ 257 ];
 extern portBASE_TYPE		xEncodedLR125kbpsAdvDataLen;
 
 /* Configured output power in different modes. */

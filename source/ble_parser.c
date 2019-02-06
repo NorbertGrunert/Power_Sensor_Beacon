@@ -68,6 +68,10 @@ static void vGetAdvState( unsigned portBASE_TYPE uxStrgIdx );
 static void vSetScanState( unsigned portBASE_TYPE uxStrgIdx );
 /* Get scan state. */
 static void vGetScanState( unsigned portBASE_TYPE uxStrgIdx );
+/* Set output power. */
+static void vSetPower( unsigned portBASE_TYPE uxStrgIdx );
+/* Get output power. */
+static void vGetPower( unsigned portBASE_TYPE uxStrgIdx );
 /*-----------------------------------------------------------*/
 
 /* Global variables. */
@@ -89,6 +93,8 @@ char pcAt_UBtA[]		= "AT+UBTA=";
 char pcAt_UBtAQ[]		= "AT+UBTA?";
 char pcAt_UBtS[]		= "AT+UBTS=";
 char pcAt_UBtSQ[]		= "AT+UBTS?";
+char pcAt_UBtPwr[]		= "AT+UBTPWR=";
+char pcAt_UBtPwrQ[]		= "AT+UBTPWR?";
 
 /* Table containing pointers to the AT response strings, parameters to be stored
    (if any) and the AT response ID to be sent to the BLE task via queue. */
@@ -104,6 +110,8 @@ static const struct xAT_CMD xAtCmd[] =
 	 { pcAt_UBtAQ,	 				vGetAdvState,				AT_NOMSG						},
 	 { pcAt_UBtS,	 				vSetScanState,				AT_NOMSG						},
 	 { pcAt_UBtSQ,	 				vGetScanState,				AT_NOMSG						},
+	 { pcAt_UBtPwr,	 				vSetPower,					AT_NOMSG						},
+	 { pcAt_UBtPwrQ, 				vGetPower,					AT_NOMSG						},
 	 { pcAt_At, 	 				vOk,						AT_NOMSG						}
 };
 /*-----------------------------------------------------------*/
@@ -290,11 +298,11 @@ static void vGetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
    Setting the advertisement data to a string of length 0 will stop advertising. */
 static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 {
-	signed char 		cLocalAdvData[ 129 ];
+	signed char 		cLocalAdvData[ 2 * 256 + 1 ];
 	portBASE_TYPE		xChrIdx;
 	
-	/* Copy the advertisement data to local buffer (HEX format, max. 64 bytes). */
-	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 128 );
+	/* Copy the advertisement data to local buffer (HEX format, max. 256 bytes). */
+	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 256 );
 	
 	if ( strlen( cLocalAdvData ) > 0 )
 	{
@@ -402,6 +410,71 @@ static void vGetScanState( unsigned portBASE_TYPE uxStrgIdx )
 	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
 	{
 		sprintf( cRespStrg, "\r\n+UBTS:%i\r\nOK\r\n", xGetScanState() );
+		xComSendStringRAM( COM0, cRespStrg );
+	}	
+}
+/*-----------------------------------------------------------*/
+
+/* Set output power. */
+static void vSetPower( unsigned portBASE_TYPE uxStrgIdx )
+{
+	signed char			cMode;
+	signed char			cPower;
+	bool				bError;
+	
+	bError = false;
+	
+	cMode = cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ );
+	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) != ',' )
+	{
+		bError = true;
+	}
+	cPower = cCharToNibble( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx ) );	
+
+	/* Check and translate the values. */
+	switch ( cPower )
+	{
+		case 0:		cPower = OUTPUT_PWR_0_dBm;	break;
+		case 4:		cPower = OUTPUT_PWR_4_dBm;	break;
+		case 6:		cPower = OUTPUT_PWR_6_dBm;	break;
+		case 8:		cPower = OUTPUT_PWR_8_dBm;	break;
+		default:	bError = true;				break;
+	}
+	
+	if ( ( cMode == '1' ) && !bError )
+	{
+		cTxPower1Mbps = cPower;
+	}
+	else if ( ( cMode == '4' ) && !bError )
+	{
+		cTxPower125kbps = cPower;
+	}
+	else
+	{
+		bError = true;
+	}
+	
+	if ( !bError )
+	{
+		/* Set the values. */
+		xComSendStringRAM( COM0, "\r\nOK\r\n" );
+	}
+	else
+	{
+		xComSendStringRAM( COM0, "\r\nERROR\r\n" );
+	}
+}
+/*-----------------------------------------------------------*/
+
+/* Get output power. */
+static void vGetPower( unsigned portBASE_TYPE uxStrgIdx )
+{
+	signed char		cRespStrg[ 24 ];
+	
+	/* Check, if the received string is terminated here. In this case, treat the command. */
+	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
+	{
+		sprintf( cRespStrg, "\r\n+UBTPWR:1,%i;4,%i\r\nOK\r\n", cTxPower1Mbps, cTxPower125kbps );
 		xComSendStringRAM( COM0, cRespStrg );
 	}	
 }
