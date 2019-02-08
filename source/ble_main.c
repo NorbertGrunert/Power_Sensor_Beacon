@@ -443,9 +443,6 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 		}
 	}
 
-	/* Start the BLE advertising timer. On expiry, the timer switch between LR and sort range advertising. */
-	( void )xTimerStart( xBleAdvTimer, portMAX_DELAY );	
-
 	/* Stop any ongoing advertising before starting another with different parameters. */
 	( void )sd_ble_gap_adv_stop( xAdvHandle );
 	
@@ -453,6 +450,9 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 
 	if ( xNewAdvState != ADV_NONE )
 	{
+		/* Start the BLE advertising timer. On expiry, the timer switch between LR and sort range advertising. */
+		( void )xTimerStart( xBleAdvTimer, portMAX_DELAY );	
+
 		// TODO: Catch error and return error as AT event. An error could mean tha tthe advertising data is bad.
 		xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
 		APP_ERROR_CHECK( xErrCode );	
@@ -464,6 +464,10 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 		/* Start the advertising. BLE_CONN_CFG_TAG_DEFAULT is ignored as this is non-connectable advertising. */
 		xErrCode = sd_ble_gap_adv_start( xAdvHandle, BLE_CONN_CFG_TAG_DEFAULT );
 		APP_ERROR_CHECK( xErrCode );	
+	}
+	else
+	{
+		( void )xTimerStop( xBleAdvTimer, portMAX_DELAY );	
 	}
 }
 /*-----------------------------------------------------------*/

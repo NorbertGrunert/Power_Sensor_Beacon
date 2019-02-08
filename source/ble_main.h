@@ -11,9 +11,10 @@
 #include <stdbool.h>
 #include "FreeRTOS.h"
 #include "semphr.h"
+#include "drv_uart.h"
 
 /* Size of the GSM UART Rx ring buffer. */
-#define	bleUART_RX_BUFFER_SIZE			150
+#define	bleUART_RX_BUFFER_SIZE			uartRX_BUFFER_SIZE
 
 /* Tag that refers to the BLE stack configuration. */
 #define APP_BLE_CONN_CFG_TAG            1 		
