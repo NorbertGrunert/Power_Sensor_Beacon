@@ -72,6 +72,10 @@ static void vGetScanState( unsigned portBASE_TYPE uxStrgIdx );
 static void vSetPower( unsigned portBASE_TYPE uxStrgIdx );
 /* Get output power. */
 static void vGetPower( unsigned portBASE_TYPE uxStrgIdx );
+/* Set advertisment interval. */
+static void vSetAdvInterval( unsigned portBASE_TYPE uxStrgIdx );
+/* Get advertisment interval. */
+static void vGetAdvInterval( unsigned portBASE_TYPE uxStrgIdx );
 /*-----------------------------------------------------------*/
 
 /* Global variables. */
@@ -95,6 +99,8 @@ char pcAt_UBtS[]		= "AT+UBTS=";
 char pcAt_UBtSQ[]		= "AT+UBTS?";
 char pcAt_UBtPwr[]		= "AT+UBTPWR=";
 char pcAt_UBtPwrQ[]		= "AT+UBTPWR?";
+char pcAt_UBtAdvInt[]	= "AT+UBTADVINT=";
+char pcAt_UBtAdvIntQ[]	= "AT+UBTADVINT?";
 
 /* Table containing pointers to the AT response strings, parameters to be stored
    (if any) and the AT response ID to be sent to the BLE task via queue. */
@@ -112,6 +118,8 @@ static const struct xAT_CMD xAtCmd[] =
 	 { pcAt_UBtSQ,	 				vGetScanState,				AT_NOMSG						},
 	 { pcAt_UBtPwr,	 				vSetPower,					AT_NOMSG						},
 	 { pcAt_UBtPwrQ, 				vGetPower,					AT_NOMSG						},
+	 { pcAt_UBtAdvInt,				vSetAdvInterval,			AT_NOMSG						},
+	 { pcAt_UBtAdvIntQ,				vGetAdvInterval,			AT_NOMSG						},
 	 { pcAt_At, 	 				vOk,						AT_NOMSG						}
 };
 /*-----------------------------------------------------------*/
@@ -410,6 +418,70 @@ static void vGetScanState( unsigned portBASE_TYPE uxStrgIdx )
 	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
 	{
 		sprintf( cRespStrg, "\r\n+UBTS:%i\r\nOK\r\n", xGetScanState() );
+		xComSendStringRAM( COM0, cRespStrg );
+	}	
+}
+/*-----------------------------------------------------------*/
+
+/* Set advertisment interval. */
+static void vSetAdvInterval( unsigned portBASE_TYPE uxStrgIdx )
+{
+	signed char			cMode;
+	unsigned long		ulAdvInterval;
+	signed char			cOctetStrg[ 6 ];
+	bool				bError;
+	
+	bError = false;
+	
+	cMode = cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ );
+	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) != ',' )
+	{
+		bError = true;
+	}
+	
+	prvCopyNFromUartBuffer( uxStrgIdx, cOctetStrg, 5 );
+	ulAdvInterval = usIntStrgToShort( cOctetStrg, 5 );
+
+	/* Check and translate the values. */
+	if ( ( ulAdvInterval < 0x20 ) || ( ulAdvInterval > 0x4000 ) )
+	{
+		bError = true;
+	}
+	
+	if ( ( cMode == '1' ) && !bError )
+	{
+		ul1MbpsAdvInterval = ulAdvInterval;
+	}
+	else if ( ( cMode == '4' ) && !bError )
+	{
+		ul125kbpsAdvInterval = ulAdvInterval;
+	}
+	else
+	{
+		bError = true;
+	}
+	
+	if ( !bError )
+	{
+		/* Set the values. */
+		xComSendStringRAM( COM0, "\r\nOK\r\n" );
+	}
+	else
+	{
+		xComSendStringRAM( COM0, "\r\nERROR\r\n" );
+	}
+}
+/*-----------------------------------------------------------*/
+
+/* Get advertisment interval. */
+static void vGetAdvInterval( unsigned portBASE_TYPE uxStrgIdx )
+{
+	signed char		cRespStrg[ 40 ];
+	
+	/* Check, if the received string is terminated here. In this case, treat the command. */
+	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
+	{
+		sprintf( cRespStrg, "\r\n+UBTADVINT:1,%i;4,%i\r\nOK\r\n", ul1MbpsAdvInterval, ul125kbpsAdvInterval );
 		xComSendStringRAM( COM0, cRespStrg );
 	}	
 }

@@ -47,6 +47,10 @@ void vLongToHexStrg( signed char *pcStrg, unsigned long ulValue );
 /* Convert a string of HEX-characters into a 32-bit value. */
 unsigned long ulHexStrgToLong( signed char *pcStrg );
 
+/* Convert a a string of unsigned integer characters including end-of-string 0x0 into a 16-bit value. 
+   The maximum size of the string is 5 characters (xLen). */
+unsigned short usIntStrgToShort( signed char *pcStrg, portBASE_TYPE	xLen );
+
 /* Return RAM string length. */
 unsigned char ucStrgRAMLen( signed char *pcChar );
 
@@ -243,6 +247,25 @@ unsigned long ulHexStrgToLong( signed char *pcStrg )
 	ulValue += usHexStrgToShort( pcStrg + 4 );
 	
 	return ulValue;
+}
+/*-----------------------------------------------------------*/
+
+/* Convert a a string of unsigned integer characters including end-of-string 0x0 into a 16-bit value. 
+   The maximum size of the string is 5 characters (xLen). 
+*/
+unsigned short usIntStrgToShort( signed char *pcStrg, portBASE_TYPE	xLen )
+{
+	signed char		cChar;
+	unsigned short 	usValue;
+	
+	/* Maximum length of an unsigned short expressed as HEX string. */
+	usValue = 0;
+	while ( ( ( cChar = *( pcStrg++ ) ) != 0 ) && ( xLen-- > 0 ) )
+	{
+		usValue = 10 * usValue + cCharToNibble( cChar );
+	}
+	
+	return usValue;
 }
 /*-----------------------------------------------------------*/
 

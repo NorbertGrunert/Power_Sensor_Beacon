@@ -40,6 +40,10 @@ extern void vLongToHexStrg( signed char *pcStrg, unsigned long ulValue );
 /* Convert a string of HEX-characters into a 32-bit value. */
 extern unsigned long ulHexStrgToLong( signed char *pcStrg );
 
+/* Convert a a string of unsigned integer characters including end-of-string 0x0 into a 16-bit value. 
+   The maximum size of the string is 5 characters (xLen). */
+extern unsigned short usIntStrgToShort( signed char *pcStrg, portBASE_TYPE	xLen );
+
 /* Return RAM string length. */
 extern unsigned char ucStrgRAMLen( signed char *pcChar );
 

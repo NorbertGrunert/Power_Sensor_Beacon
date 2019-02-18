@@ -201,6 +201,10 @@ portBASE_TYPE				xEncodedLR125kbpsAdvDataLen;
 /* Configured output power in different modes. */
 uint8_t						cTxPower1Mbps;
 uint8_t						cTxPower125kbps;
+
+/* Advertising intervals for long and short range. */
+uint32_t					ul1MbpsAdvInterval;
+uint32_t					ul125kbpsAdvInterval;
 /*-----------------------------------------------------------*/
 
 /* 
@@ -359,7 +363,11 @@ static void vBleStackInit( void )
 	/* Initialise the output power to default values. */
 	cTxPower1Mbps = OUTPUT_PWR_6_dBm;
 	cTxPower125kbps = OUTPUT_PWR_6_dBm;
- 
+ 	
+	/* Set advertisement interval to default. */
+	ul1MbpsAdvInterval = ADV_INTERVAL;
+	ul125kbpsAdvInterval = ADV_INTERVAL;
+
     xErrCode = nrf_sdh_enable_request();
     APP_ERROR_CHECK( xErrCode );
 
@@ -409,6 +417,7 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 		/* Long Range only: Set the PHY to 125kbps. */
 		xAdvParams.primary_phy = BLE_GAP_PHY_CODED;
 		xAdvParams.secondary_phy = BLE_GAP_PHY_CODED;
+		xAdvParams.interval = ul125kbpsAdvInterval;
 		cTxPower = cTxPower125kbps;		
 		xAdvMode = ADV_LR125KBPS;
 		xAdvData.adv_data.p_data = cEncodedLR125kbpsAdvData;
@@ -424,6 +433,7 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 			/* In case standard advertising is set alone or combined with long range, start with the advertising 1Mbps PHY. */
 			xAdvParams.primary_phy = BLE_GAP_PHY_1MBPS;
 			xAdvParams.secondary_phy = BLE_GAP_PHY_1MBPS;
+			xAdvParams.interval = ul1MbpsAdvInterval;
 			cTxPower = cTxPower1Mbps;	
 			xAdvMode = ADV_STD1MBPS;
 			xAdvData.adv_data.p_data = cEncodedStd1MbpsAdvData;

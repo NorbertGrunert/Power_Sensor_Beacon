@@ -41,7 +41,7 @@
 /* Advertising interval (in units of 0.625 ms) */
 #define ADV_INTERVAL 					160
 
-/* INterval at which the advertising mode is toggled between long range and standard, if configured. */
+/* Interval at which the advertising mode is toggled between long range and standard, if configured. */
 #define ADV_INTERLEAVING_TIME			10 * portTICKS_PER_100MSEC
 
 /* SCAN_INTERVAL - Scanning interval, determines scan interval in units of 0.625 millisecond. */
@@ -89,5 +89,7 @@ extern portBASE_TYPE		xEncodedLR125kbpsAdvDataLen;
 /* Configured output power in different modes. */
 extern uint8_t				cTxPower1Mbps;
 extern uint8_t				cTxPower125kbps;
+extern uint32_t				ul1MbpsAdvInterval;
+extern uint32_t				ul125kbpsAdvInterval;
 
 #endif
