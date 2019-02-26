@@ -207,9 +207,9 @@ static void vOkNoEOLCheck( unsigned portBASE_TYPE uxStrgIdx )
 static void vGetVersion( unsigned portBASE_TYPE uxStrgIdx )
 {
 	#ifdef DEBUG
-		static char 		cFwVersion[] = "\r\n" VERSION "-DBG FW=";
+		static char 	cFwVersion[] = "\r\n" VERSION "-DBG FW=";
 	#else
-		static char 		cFwVersion[] = "\r\n" VERSION "-REL FW=";
+		static char 	cFwVersion[] = "\r\n" VERSION "-REL FW=";
 	#endif
 	static char 		cFwVersion2[] = "\r\nOK\r\n";
 
@@ -230,9 +230,15 @@ static void vGetBTAddr( unsigned portBASE_TYPE uxStrgIdx )
 	char			cBtAddr[ 3 ];
 	portBASE_TYPE	xIdx;
 	
+	/* Request access to BLE configuration. */
+	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+	
 	/* Retrieve BLE GAP address. */
 	sd_ble_gap_addr_get( &xBleGapAddr );
-
+		
+	/* Release access to BLE configuration. */
+	xSemaphoreGive( xMutexBleConfig );
+	
 	xComSendStringRAM( COM0, "\r\n+UMLA:" );
 	for ( xIdx = 0; xIdx < 6; xIdx++)
 	{
@@ -250,6 +256,9 @@ static void vSetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 {
 	signed char 		cLocalAdvData[ 129 ];
 	portBASE_TYPE		xChrIdx;
+	bool				bError;
+	
+	bError = false;
 	
 	/* Copy the advertisement data to local buffer (HEX format, max. 64 bytes). */
 	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 128 );
@@ -270,12 +279,22 @@ static void vSetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 
 		/* Set the total payload length. */
 		xEncodedStd1MbpsAdvDataLen = ( strlen( cLocalAdvData ) >> 1 ) + 3;
+		
+		/* Check the received payload length against the AD field length in the payload. */
+		if ( xEncodedStd1MbpsAdvDataLen - 3 - 1 != cEncodedStd1MbpsAdvData[ 3 ] )
+		{
+			xComSendStringRAM( COM0, "\r\nERROR: Invalid advertising payload length.\r\n");
+			bError = true;
+		}
 	}
 	
-	/* Restart advertising in the same state so that the new data gets correctly taken into account. */
-	vStartAdvertising( xGetAdvState() );
+	if ( !bError )
+	{
+		/* Restart advertising in the same state so that the new data gets correctly taken into account. */
+		vStartAdvertising( xGetAdvState() );
 
-	xComSendStringRAM( COM0, "\r\nOK\r\n");
+		xComSendStringRAM( COM0, "\r\nOK\r\n");
+	}
 }
 /*-----------------------------------------------------------*/
 	
@@ -308,6 +327,9 @@ static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 {
 	signed char 		cLocalAdvData[ 2 * 256 + 1 ];
 	portBASE_TYPE		xChrIdx;
+	bool				bError;
+	
+	bError = false;
 	
 	/* Copy the advertisement data to local buffer (HEX format, max. 256 bytes). */
 	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 256 );
@@ -328,12 +350,22 @@ static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 
 		/* Set the total payload length. */
 		xEncodedLR125kbpsAdvDataLen = ( strlen( cLocalAdvData ) >> 1 ) + 3;
+		
+		/* Check the received payload length against the AD field length in the payload. */
+		if ( xEncodedLR125kbpsAdvDataLen - 3 - 1 != cEncodedLR125kbpsAdvData[ 3 ] )
+		{
+			xComSendStringRAM( COM0, "\r\nERROR: Invalid advertising payload length.\r\n");
+			bError = true;
+		}
 	}
 	
-	/* Restart advertising in the same state so that the new data gets correctly taken into account. */
-	vStartAdvertising( xGetAdvState() );
+	if ( !bError )
+	{
+		/* Restart advertising in the same state so that the new data gets correctly taken into account. */
+		vStartAdvertising( xGetAdvState() );
 
-	xComSendStringRAM( COM0, "\r\nOK\r\n");
+		xComSendStringRAM( COM0, "\r\nOK\r\n");
+	}
 }
 /*-----------------------------------------------------------*/
 	

@@ -13,6 +13,22 @@
 #include "semphr.h"
 #include "drv_uart.h"
 
+/* Macros */
+
+#define APP_ERROR_CHECK_ATIF( ERR_STRG, ERR_CODE )								\
+    do																			\
+    {																			\
+        const uint32_t LOCAL_ERR_CODE = ( ERR_CODE );							\
+        if ( LOCAL_ERR_CODE != NRF_SUCCESS )									\
+        {																		\
+			sprintf( cErrorStrg, ERR_STRG, xErrCode );							\
+			xComSendStringRAM( COM0, cErrorStrg );								\
+			vTaskDelay( 3 * portTICKS_PER_SEC );								\
+            APP_ERROR_HANDLER( LOCAL_ERR_CODE );								\
+        }																		\
+    } while (0)
+/*-----------------------------------------------------------*/
+
 /* Size of the GSM UART Rx ring buffer. */
 #define	bleUART_RX_BUFFER_SIZE			uartRX_BUFFER_SIZE
 
@@ -79,6 +95,9 @@ extern portBASE_TYPE xGetScanState( void );
 /* Global variables. */
 /* BLE command queue handle. The queue is read in the BLE task and filled in the CTRL task. */
 extern QueueHandle_t 		xBleCmdQueue; 
+
+/* Mutex handle to protect access to BLE configuration. */
+extern SemaphoreHandle_t	xMutexBleConfig;
 
 /* Advertising data. */
 extern signed char			cEncodedStd1MbpsAdvData[ 100 ];

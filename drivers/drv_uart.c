@@ -397,21 +397,30 @@ signed portBASE_TYPE xComSendStringRAM( unsigned portBASE_TYPE xComID, signed ch
 			char		cBuf[ 10 ];
 			
 			sprintf( cBuf, "_%i\r\n", xTxQueueSpaceLeft );
-			xErrCode = nrf_serial_write( xCom[ xComID ].pxUartHWInst,
-										 cBuf,
-										 strlen( cBuf ),
-										 NULL,
-										 0 );					/* nrf_serial operates in non-blocking mode. */
+			do
+			{
+				/* Repeat attempt to write to serial until it is unlocked. */
+				xErrCode = nrf_serial_write( xCom[ xComID ].pxUartHWInst,
+											 cBuf,
+											 strlen( cBuf ),
+											 NULL,
+											 0 );					/* nrf_serial operates in non-blocking mode. */
+			} while ( xErrCode == NRF_ERROR_BUSY );
+										 
 			/* Trash string to be sent and return an error code. */
 			xSuccessCode = pdFALSE;
 		}
 		else
 		{
-			xErrCode = nrf_serial_write( xCom[ xComID ].pxUartHWInst,
-										 pcTxString,
-										 xTxStrgLen,
-										 NULL,
-										 0 );					/* nrf_serial operates in non-blocking mode. */
+			do
+			{
+				/* Repeat attempt to write to serial until it is unlocked. */
+				xErrCode = nrf_serial_write( xCom[ xComID ].pxUartHWInst,
+											 pcTxString,
+											 xTxStrgLen,
+											 NULL,
+											 0 );					/* nrf_serial operates in non-blocking mode. */
+			} while ( xErrCode == NRF_ERROR_BUSY );
 			APP_ERROR_CHECK( xErrCode );
 		}
 	}
@@ -538,7 +547,7 @@ static void vSerialEventHandlerCom0( struct nrf_serial_s const *p_serial, nrf_se
 			break;
 		
 		case NRF_SERIAL_EVENT_DRV_ERR:
-			( void )nrf_serial_write( xCom[ 0 ].pxUartHWInst,
+			( void )nrf_serial_write( xCom[ COM0 ].pxUartHWInst,
 										 "_2\r\n",
 										 4,
 										 NULL,
@@ -547,7 +556,7 @@ static void vSerialEventHandlerCom0( struct nrf_serial_s const *p_serial, nrf_se
 			break;
 		
 		case NRF_SERIAL_EVENT_FIFO_ERR:
-			( void )nrf_serial_write( xCom[ 0 ].pxUartHWInst,
+			( void )nrf_serial_write( xCom[ COM0 ].pxUartHWInst,
 										 "_3\r\n",
 										 4,
 										 NULL,

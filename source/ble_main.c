@@ -188,9 +188,15 @@ static uint8_t				xAdvHandle;
 		bit 0				1Mbps scanning
 		bit 2				125kbps scanning */
 static portBASE_TYPE		xScanState;
+
+/* Error string. */
+signed char					cErrorStrg[ 60 ];		
 /*-----------------------------------------------------------*/
 
 /* Public variables. */
+
+/* Mutex handle to protect access to BLE configuration. */
+SemaphoreHandle_t			xMutexBleConfig;
 
 /* Advertising data. */
 signed char					cEncodedStd1MbpsAdvData[ 100 ];
@@ -237,6 +243,9 @@ void vBleInit( void )
 							);
 	
 	( void )xTimerStart( xTemperatureTimer, portMAX_DELAY );
+	
+	/* Create a mutex to protect access to the BLE configuration. */
+	xMutexBleConfig = xSemaphoreCreateMutex();
 	
 	/* No advertisement data set yet. */
 	xEncodedStd1MbpsAdvDataLen = 0;
@@ -333,7 +342,7 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 						
 			/* Continue scanning. */
 			xErrCode = sd_ble_gap_scan_start( NULL, &xScanBuffer );
-			APP_ERROR_CHECK( xErrCode );
+			APP_ERROR_CHECK_ATIF( "ERROR scan continue: 0x%x", xErrCode );
 			
             break;
         
@@ -369,17 +378,17 @@ static void vBleStackInit( void )
 	ul125kbpsAdvInterval = ADV_INTERVAL;
 
     xErrCode = nrf_sdh_enable_request();
-    APP_ERROR_CHECK( xErrCode );
+    APP_ERROR_CHECK_ATIF( "ERROR enabling SDH: 0x%x", xErrCode );
 
     /* Configure the BLE stack using the default settings.
        Fetch the start address of the application RAM. */
     ulRamStart = 0;
     xErrCode = nrf_sdh_ble_default_cfg_set( APP_BLE_CONN_CFG_TAG, &ulRamStart );
-    APP_ERROR_CHECK( xErrCode );
+    APP_ERROR_CHECK_ATIF( "ERROR configuring BLE stack: 0x%x", xErrCode );
 
     /* Enable BLE stack. */
     xErrCode = nrf_sdh_ble_enable( &ulRamStart );
-    APP_ERROR_CHECK( xErrCode );
+    APP_ERROR_CHECK_ATIF( "ERROR enabling BLE: 0x%x", xErrCode );
 
     /* Register a handler for BLE events. */
     NRF_SDH_BLE_OBSERVER( m_ble_observer, APP_BLE_OBSERVER_PRIO, vBleEvtHandler, NULL );
@@ -392,7 +401,7 @@ static void vBleStackInit( void )
 	xBleGapAddr.addr[2] = ( char )( ( NRF_FICR->DEVICEADDR[0] & 0x00ff0000 ) >> 16 );
 	
 	xErrCode = sd_ble_gap_addr_set( &xBleGapAddr );
-    APP_ERROR_CHECK( xErrCode );
+    APP_ERROR_CHECK_ATIF( "ERROR while setting GAP advertiser address: 0x%x", xErrCode );
 	
     /* Create a FreeRTOS task to retrieve SoftDevice events. The first parameter is an optional pointer to a function
   	   to be executed */
@@ -405,6 +414,9 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 {
 	ret_code_t	xErrCode;
 	int8_t		cTxPower;
+	
+	/* Request access to BLE configuration. */
+	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
 	
 	/* Configure the advertisement:
 	   Advertisement data is in xAdvData.
@@ -460,36 +472,48 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 
 	if ( xNewAdvState != ADV_NONE )
 	{
+		/* Stop any ongoing advertising before starting another with different parameters. */
+		( void ) sd_ble_gap_adv_stop( xAdvHandle );
+	
 		/* Start the BLE advertising timer. On expiry, the timer switch between LR and sort range advertising. */
 		( void )xTimerStart( xBleAdvTimer, portMAX_DELAY );	
 
-		// TODO: Catch error and return error as AT event. An error could mean tha tthe advertising data is bad.
+		/* Configure GAP advertising. */
 		xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
-		APP_ERROR_CHECK( xErrCode );	
+		APP_ERROR_CHECK_ATIF( "ERROR while configuring advertising: 0x%x", xErrCode );
 		
 		/* Set the output power. */
 		xErrCode = sd_ble_gap_tx_power_set( BLE_GAP_TX_POWER_ROLE_ADV, xAdvHandle, cTxPower );
-		APP_ERROR_CHECK( xErrCode );
+		APP_ERROR_CHECK_ATIF( "ERROR while setting TX power: 0x%x", xErrCode );
 
 		/* Start the advertising. BLE_CONN_CFG_TAG_DEFAULT is ignored as this is non-connectable advertising. */
 		xErrCode = sd_ble_gap_adv_start( xAdvHandle, BLE_CONN_CFG_TAG_DEFAULT );
-		APP_ERROR_CHECK( xErrCode );	
+		APP_ERROR_CHECK_ATIF( "ERROR while starting advertising: 0x%x", xErrCode );
 	}
 	else
 	{
 		( void )xTimerStop( xBleAdvTimer, portMAX_DELAY );	
 	}
+		
+	/* Release access to BLE configuration. */
+	xSemaphoreGive( xMutexBleConfig );
 }
 /*-----------------------------------------------------------*/
 
 /* Stop advertising. */
 void vStopAdvertising( void )
 {
+	/* Request access to BLE configuration. */
+	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+
 	NRF_LOG_DEBUG( "Advertising stopped." );	   
 	( void )xTimerStop( xBleAdvTimer, portMAX_DELAY );		
 	( void )sd_ble_gap_adv_stop( xAdvHandle );
   
-  xAdvState = ADV_NONE;
+	xAdvState = ADV_NONE;
+		
+	/* Release access to BLE configuration. */
+	xSemaphoreGive( xMutexBleConfig );
 }
 /*-----------------------------------------------------------*/
 
@@ -503,6 +527,9 @@ portBASE_TYPE xGetAdvState( void )
 void vStartScan( portBASE_TYPE xNewScanState )
 {
 	ret_code_t xErrCode;
+	
+	/* Request access to BLE configuration. */
+	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
 	
 	NRF_LOG_DEBUG( "Scanning mode set to %i.", xNewScanState );	   
 	
@@ -522,7 +549,10 @@ void vStartScan( portBASE_TYPE xNewScanState )
    
 	/* Start scanning. */
 	xErrCode = sd_ble_gap_scan_start( &xScanParam, &xScanBuffer );
-	APP_ERROR_CHECK( xErrCode );
+	APP_ERROR_CHECK_ATIF( "ERROR while starting scanning: 0x%x", xErrCode );
+		
+	/* Release access to BLE configuration. */
+	xSemaphoreGive( xMutexBleConfig );
 	
 	xScanState = xNewScanState;
 }
@@ -531,9 +561,15 @@ void vStartScan( portBASE_TYPE xNewScanState )
 /* Stop scanning. */
 void vStopScan( void )
 {
+	/* Request access to BLE configuration. */
+	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+
 	/* Stop scanning. */
 	NRF_LOG_DEBUG( "Scanning stopped." );	   
 	( void )sd_ble_gap_scan_stop();
+		
+	/* Release access to BLE configuration. */
+	xSemaphoreGive( xMutexBleConfig );
 	
 	xScanState = SCAN_NONE;
 }
@@ -555,9 +591,12 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 
 	( void )xTimer;
 	
-	/* Test for concurrent standard / long range advertising requirement. */
+/* Test for concurrent standard / long range advertising requirement. */
 	if ( xAdvState == ( ADV_STD1MBPS | ADV_LR125KBPS ) )
 	{
+		/* Request access to BLE configuration. */
+		xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+
 		/* Switch between modes. */
 		if ( xAdvMode == ADV_STD1MBPS )
 		{
@@ -600,17 +639,22 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 		/* Stop any ongoing advertising before starting another with different parameters. */
 		( void ) sd_ble_gap_adv_stop( xAdvHandle );
 	
-		// TODO: Catch error and return error as AT event. An error could mean that the advertising data is bad.
+		/* Configure advertsising. Catch error and return error as AT event. An error could mean that the 
+		   advertising data is bad. */
 		xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
-		APP_ERROR_CHECK( xErrCode );	
+		APP_ERROR_CHECK_ATIF( "ERROR while configuring advertising: 0x%x", xErrCode );
 		
 		/* Set the output power. */
 		xErrCode = sd_ble_gap_tx_power_set( BLE_GAP_TX_POWER_ROLE_ADV, xAdvHandle, cTxPower );
-		APP_ERROR_CHECK( xErrCode );
+		APP_ERROR_CHECK_ATIF( "ERROR while setting TX power: 0x%x", xErrCode );
 
 		/* Start the advertising. BLE_CONN_CFG_TAG_DEFAULT is ignored as this is non-connectable advertising. */
 		xErrCode = sd_ble_gap_adv_start( xAdvHandle, BLE_CONN_CFG_TAG_DEFAULT );
-		APP_ERROR_CHECK( xErrCode );	
+		APP_ERROR_CHECK_ATIF( "ERROR while starting advertising: 0x%x", xErrCode );
+		
+		/* Release access to BLE configuration. */
+		xSemaphoreGive( xMutexBleConfig );
+		
 		NRF_LOG_FLUSH();
 	}	
 }

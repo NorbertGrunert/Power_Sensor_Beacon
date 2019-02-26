@@ -17,8 +17,8 @@
 #define	portTICKS_PER_MIN			( 60 * portTICKS_PER_SEC )
 
 /* Task stack sizes. The idle task and timer stack sizes are defined in FreeRTOSConfig.h */
-#define bleSTACK_SIZE				( ( unsigned short ) 2048 )
-#define bleParserSTACK_SIZE			( ( unsigned short ) 2048 )
+#define bleSTACK_SIZE				( ( unsigned short ) 1024 )
+#define bleParserSTACK_SIZE			( ( unsigned short ) 1024 )
 
 
 /* Task priority definitions. */
