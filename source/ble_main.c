@@ -67,6 +67,9 @@ static void vStartUp( void * pvParameter );
 /* Function for handling BLE_GAP_ADV_REPORT events. */
 static void vOnAdvReport( ble_gap_evt_adv_report_t const *pxAdvReport );
 
+/* Function to check if a received BLE advertiser needs to be reported. */
+bool bCheckDeviceToReport( uint8_t *puxDeviceGapAddress, uint8_t uxPhy );
+
  /* Function for handling BLE Stack events. */
 static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext );
 
@@ -189,6 +192,19 @@ static uint8_t				xAdvHandle;
 		bit 2				125kbps scanning */
 static portBASE_TYPE		xScanState;
 
+struct 
+{
+	struct 
+	{
+		uint8_t				xGapAddress[ 6 ];
+		TickType_t			xRxTimeStamp;
+		uint8_t				uxPhy;
+	}						xKnownDeviceList[ KNOWN_DEVICE_LIST_LEN ];
+	
+	unsigned portBASE_TYPE	uxLastEntry;
+	
+} xKnownDevices;
+
 /* Error string. */
 signed char					cErrorStrg[ 60 ];		
 /*-----------------------------------------------------------*/
@@ -250,6 +266,9 @@ void vBleInit( void )
 	/* No advertisement data set yet. */
 	xEncodedStd1MbpsAdvDataLen = 0;
 	xEncodedLR125kbpsAdvDataLen = 0;
+	
+	/* Reset the list of known BLE devices. */
+	xKnownDevices.uxLastEntry = 0;
 }
 /*-----------------------------------------------------------*/
 
@@ -267,10 +286,88 @@ static void vStartUp( void * pvParameter )
 }
 /*-----------------------------------------------------------*/
 
-/*
- * Function for handling BLE Stack events.
- * Parameters:	pxBleEvt  Bluetooth stack event.
- */
+/* Function to check if a received BLE advertiser needs to be reported. 
+   The function maintains a list of devices already seen before and the time they
+   have been seen last.
+   
+   When called, the function checks if the referenced device is already in
+   the list and has been seen during the last N seconds.
+   If yes, it returns false.
+   
+   If it is in the list but not seen during the last N seconds, the
+   function returns true and updates the time stamp.
+   
+   If the device is not in the list, it is added to the list with the
+   current time stamp and the function returns true.  
+*/
+bool bCheckDeviceToReport( uint8_t *puxDeviceGapAddress, uint8_t uxPhy )
+{
+	unsigned portBASE_TYPE	uxListIdx;
+	bool					bDeviceFound;
+	bool					bDeviceToReport;
+	
+	bDeviceToReport = false;
+	uxListIdx = 0;
+	bDeviceFound = false;
+	
+	/* Check if the device is already in the list of known devices. */
+	do
+	{
+		if (   ( memcmp( xKnownDevices.xKnownDeviceList[ uxListIdx ].xGapAddress, puxDeviceGapAddress, 6 ) == 0 )
+			&& ( xKnownDevices.xKnownDeviceList[ uxListIdx ].uxPhy == uxPhy ) )
+		{
+			bDeviceFound = true;
+		}
+		else
+		{
+			uxListIdx++;
+		}
+	}
+	while ( !bDeviceFound && ( uxListIdx < xKnownDevices.uxLastEntry ) ) ;
+	
+	/* If the device is not yet in the list and there is en. Enter it with the current time stamp. */
+	if ( !bDeviceFound )
+	{
+		if ( xKnownDevices.uxLastEntry < KNOWN_DEVICE_LIST_LEN )
+		{
+			/* Not in list and still room in the list. */
+			memcpy( xKnownDevices.xKnownDeviceList[ uxListIdx ].xGapAddress, puxDeviceGapAddress, 6 );
+			xKnownDevices.xKnownDeviceList[ uxListIdx ].xRxTimeStamp = xTaskGetTickCount();
+			xKnownDevices.xKnownDeviceList[ uxListIdx ].uxPhy = uxPhy;
+		
+			xKnownDevices.uxLastEntry++;
+		
+			bDeviceToReport = true;
+		}
+		else
+		{
+			/* Not in list and list is full. Return true to not filter it out. */
+			bDeviceToReport = true;
+		}
+	}
+	else
+	{
+		/* The device has been found in the list. Check if is has been seen less than N seconds ago. */
+		if ( xTaskGetTickCount() - xKnownDevices.xKnownDeviceList[ uxListIdx ].xRxTimeStamp < DEVICE_FILTER_INTERVAL )
+		{
+			/* The device has been seen less than N seconds ago. So ignore it now. */
+			bDeviceToReport = false;
+		}
+		else
+		{
+			/* The device has been seen more than N seconds ago. Report it now and update the time stamp. */
+			xKnownDevices.xKnownDeviceList[ uxListIdx ].xRxTimeStamp = xTaskGetTickCount();
+			bDeviceToReport = true;
+		}
+	}
+	
+	return bDeviceToReport;
+}
+/*-----------------------------------------------------------*/
+
+/* Function for handling BLE Stack events.
+   Parameters:	pxBleEvt  Bluetooth stack event.
+*/
 static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 {
 	ret_code_t					xErrCode;
@@ -293,51 +390,57 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 			bAdvReportUblox  = ( strncmp(     uTLSignature, xAdvReport.data.p_data + 4, 3 ) == 0 );
 			bAdvReportRadius = ( strncmp( cRadiusSignature, xAdvReport.data.p_data + 3, 4 ) == 0 );
 
-			 if ( ( bAdvReportUblox  == true ) ||
-				  ( bAdvReportRadius == true ) )
-			 {   
-				cRssiValue = xAdvReport.rssi;
+			if ( ( bAdvReportUblox  == true ) ||
+				 ( bAdvReportRadius == true ) )
+			{   
+				/* Check if the device has already been seen during the last N seconds.
+				   If not, send the report and update the device' time stamp in the list
+				   of seen devices. */
+				if ( bCheckDeviceToReport( xAdvReport.peer_addr.addr, xAdvReport.primary_phy ) )
+				{  
+					cRssiValue = xAdvReport.rssi;
 
-				switch (xAdvReport.peer_addr.addr_type)
-				{
-					case BLE_GAP_ADDR_TYPE_PUBLIC:							cAddrType = 'p'; break;
-					case BLE_GAP_ADDR_TYPE_RANDOM_STATIC:					cAddrType = 'r'; break;
-					case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE :		cAddrType = 's'; break;
-					case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE:	cAddrType = 'n'; break;
-					case BLE_GAP_ADDR_TYPE_ANONYMOUS:						cAddrType = 'a'; break;
-					default:												cAddrType = 'u'; break;
-				}
-		
-				/* Create a fake ublox scan report. */
-				pcAdvReportStrg = cAdvReportStrg;
-				pcAdvReportStrg += sprintf( pcAdvReportStrg, "+UBTD:%02X%02X%02X%02X%02X%02X%c,%2.2d,\"\",2,",
-											xAdvReport.peer_addr.addr[ 5 ],
-											xAdvReport.peer_addr.addr[ 4 ],
-											xAdvReport.peer_addr.addr[ 3 ],
-											xAdvReport.peer_addr.addr[ 2 ],
-											xAdvReport.peer_addr.addr[ 1 ],
-											xAdvReport.peer_addr.addr[ 0 ],
-											cAddrType,
-											cRssiValue );
-
-				/* Append the advertising data unless ble_gap_adv_report_type_t::status is set to BLE_GAP_ADV_DATA_STATUS_INCOMPLETE_MORE_DATA */
-				if ( xAdvReport.type.status != BLE_GAP_ADV_DATA_STATUS_INCOMPLETE_MORE_DATA )
-				{
-					for ( int idx = 0; idx < xAdvReport.data.len; idx++ )
+					switch (xAdvReport.peer_addr.addr_type)
 					{
-						pcAdvReportStrg += sprintf( pcAdvReportStrg, "%02X", *(xAdvReport.data.p_data + idx ) );
+						case BLE_GAP_ADDR_TYPE_PUBLIC:							cAddrType = 'p'; break;
+						case BLE_GAP_ADDR_TYPE_RANDOM_STATIC:					cAddrType = 'r'; break;
+						case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE :		cAddrType = 's'; break;
+						case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE:	cAddrType = 'n'; break;
+						case BLE_GAP_ADDR_TYPE_ANONYMOUS:						cAddrType = 'a'; break;
+						default:												cAddrType = 'u'; break;
 					}
-				}		  
-
-				/* Add receiving PHY. Coding:
-					1		BLE_GAP_PHY_1MBPS
-					4		BLE_GAP_PHY_CODED   */
-				pcAdvReportStrg += sprintf( pcAdvReportStrg, ",%i\r\n", xAdvReport.primary_phy ); 		 
 		
-				xComSendStringRAM( COM0, cAdvReportStrg );
+					/* Create a fake ublox scan report. */
+					pcAdvReportStrg = cAdvReportStrg;
+					pcAdvReportStrg += sprintf( pcAdvReportStrg, "+UBTD:%02X%02X%02X%02X%02X%02X%c,%2.2d,\"\",2,",
+												xAdvReport.peer_addr.addr[ 5 ],
+												xAdvReport.peer_addr.addr[ 4 ],
+												xAdvReport.peer_addr.addr[ 3 ],
+												xAdvReport.peer_addr.addr[ 2 ],
+												xAdvReport.peer_addr.addr[ 1 ],
+												xAdvReport.peer_addr.addr[ 0 ],
+												cAddrType,
+												cRssiValue );
+
+					/* Append the advertising data unless ble_gap_adv_report_type_t::status is set to BLE_GAP_ADV_DATA_STATUS_INCOMPLETE_MORE_DATA */
+					if ( xAdvReport.type.status != BLE_GAP_ADV_DATA_STATUS_INCOMPLETE_MORE_DATA )
+					{
+						for ( int idx = 0; idx < xAdvReport.data.len; idx++ )
+						{
+							pcAdvReportStrg += sprintf( pcAdvReportStrg, "%02X", *(xAdvReport.data.p_data + idx ) );
+						}
+					}		  
+
+					/* Add receiving PHY. Coding:
+						1		BLE_GAP_PHY_1MBPS
+						4		BLE_GAP_PHY_CODED   */
+					pcAdvReportStrg += sprintf( pcAdvReportStrg, ",%i\r\n", xAdvReport.primary_phy ); 		 
+		
+					xComSendStringRAM( COM0, cAdvReportStrg );
 				
-				/* Flush the log buffer from time to time. */
-				NRF_LOG_FLUSH();
+					/* Flush the log buffer from time to time. */
+					NRF_LOG_FLUSH();
+				}
 			}
 						
 			/* Continue scanning. */
@@ -555,6 +658,9 @@ void vStartScan( portBASE_TYPE xNewScanState )
 	xSemaphoreGive( xMutexBleConfig );
 	
 	xScanState = xNewScanState;
+	
+	/* Reset the list of known BLE devices to start rebuilding it. */
+	xKnownDevices.uxLastEntry = 0;		
 }
 /*-----------------------------------------------------------*/
 

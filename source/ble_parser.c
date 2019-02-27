@@ -327,22 +327,24 @@ static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 {
 	signed char 		cLocalAdvData[ 2 * 256 + 1 ];
 	portBASE_TYPE		xChrIdx;
-	bool				bError;
-	
-	bError = false;
 	
 	/* Copy the advertisement data to local buffer (HEX format, max. 256 bytes). */
 	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 256 );
 	
-	if ( strlen( cLocalAdvData ) > 0 )
+	/* Check the received payload length against the AD field length in the payload. */
+	if (   ( strlen( cLocalAdvData ) > 0 )
+		&& ( ( strlen( cLocalAdvData ) >> 1 ) - 1 == ucHexStrgToByte( cLocalAdvData ) ) )
 	{
+		/* Request access to BLE configuration. */
+		xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+	
 		/* Convert to binary and store in global advertisement data buffer. 
 		   Leave space for the advertisement flag field (requires 3 bytes). */
 		for ( xChrIdx = 0; xChrIdx < strlen( cLocalAdvData ); xChrIdx += 2 )
 		{
 			cEncodedLR125kbpsAdvData[ ( xChrIdx >> 1 ) + 3 ] = ucHexStrgToByte( cLocalAdvData + xChrIdx );
 		}
-	
+
 		/* Add the default advertising flags in the payload. */
 		cEncodedLR125kbpsAdvData[ 0 ] = 0x02;			/* AD length: 2 bytes. */
 		cEncodedLR125kbpsAdvData[ 1 ] = 0x01;			/* AD Type: 1 = advertiser flags. */
@@ -350,21 +352,18 @@ static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 
 		/* Set the total payload length. */
 		xEncodedLR125kbpsAdvDataLen = ( strlen( cLocalAdvData ) >> 1 ) + 3;
-		
-		/* Check the received payload length against the AD field length in the payload. */
-		if ( xEncodedLR125kbpsAdvDataLen - 3 - 1 != cEncodedLR125kbpsAdvData[ 3 ] )
-		{
-			xComSendStringRAM( COM0, "\r\nERROR: Invalid advertising payload length.\r\n");
-			bError = true;
-		}
-	}
 	
-	if ( !bError )
-	{
+		/* Release access to BLE configuration. */
+		xSemaphoreGive( xMutexBleConfig );
+		
 		/* Restart advertising in the same state so that the new data gets correctly taken into account. */
 		vStartAdvertising( xGetAdvState() );
-
+		
 		xComSendStringRAM( COM0, "\r\nOK\r\n");
+	}
+	else
+	{
+		xComSendStringRAM( COM0, "\r\nERROR: Invalid advertising payload length.\r\n");
 	}
 }
 /*-----------------------------------------------------------*/

@@ -69,6 +69,11 @@
 /* Temperature poll interval. */
 #define TEMP_POLL_INTERVAL				20 * portTICKS_PER_SEC
 
+/* Length of the list of known devices. */
+#define KNOWN_DEVICE_LIST_LEN			50
+
+#define DEVICE_FILTER_INTERVAL			5 * portTICKS_PER_SEC
+
 
 /* Public function prototypes. */
 extern void vBleInit( void );
