@@ -263,8 +263,12 @@ static void vSetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 	/* Copy the advertisement data to local buffer (HEX format, max. 64 bytes). */
 	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 128 );
 	
-	if ( strlen( cLocalAdvData ) > 0 )
+	if (   ( strlen( cLocalAdvData ) > 0 )
+		&& ( ( strlen( cLocalAdvData ) >> 1 ) - 1 == ucHexStrgToByte( cLocalAdvData ) ) )
 	{
+		/* Request access to BLE configuration. */
+		xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+
 		/* Convert to binary and store in global advertisement data buffer. 
 		   Leave space for the advertisement flag field (requires 3 bytes). */
 		for ( xChrIdx = 0; xChrIdx < strlen( cLocalAdvData ); xChrIdx += 2 )
@@ -280,20 +284,20 @@ static void vSetStd1MbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 		/* Set the total payload length. */
 		xEncodedStd1MbpsAdvDataLen = ( strlen( cLocalAdvData ) >> 1 ) + 3;
 		
-		/* Check the received payload length against the AD field length in the payload. */
-		if ( xEncodedStd1MbpsAdvDataLen - 3 - 1 != cEncodedStd1MbpsAdvData[ 3 ] )
-		{
-			xComSendStringRAM( COM0, "\r\nERROR: Invalid advertising payload length.\r\n");
-			bError = true;
-		}
-	}
-	
-	if ( !bError )
-	{
+		/* Release access to BLE configuration. */
+		xSemaphoreGive( xMutexBleConfig );
+		
 		/* Restart advertising in the same state so that the new data gets correctly taken into account. */
-		vStartAdvertising( xGetAdvState() );
-
+		if ( xGetAdvState() != ADV_NONE )
+		{
+			vStartAdvertising( xGetAdvState() );
+		}
+		
 		xComSendStringRAM( COM0, "\r\nOK\r\n");
+	}
+	else
+	{
+		xComSendStringRAM( COM0, "\r\nERROR: Invalid advertising payload length.\r\n");
 	}
 }
 /*-----------------------------------------------------------*/
@@ -357,7 +361,10 @@ static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 		xSemaphoreGive( xMutexBleConfig );
 		
 		/* Restart advertising in the same state so that the new data gets correctly taken into account. */
-		vStartAdvertising( xGetAdvState() );
+		if ( xGetAdvState() != ADV_NONE )
+		{
+			vStartAdvertising( xGetAdvState() );
+		}
 		
 		xComSendStringRAM( COM0, "\r\nOK\r\n");
 	}
