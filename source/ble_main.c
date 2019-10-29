@@ -127,7 +127,7 @@ static ble_gap_scan_params_t xScanParam =
 	.extended      = 1,
 	.active        = 0x00,							/* Passive scan only. */
 	.interval      = SCAN_INTERVAL,
-    .window        = SCAN_WINDOW,
+    .window        = SCAN_WINDOW_MONO,				/* Prepare for mono (i.e. 1Mbps only as opposed to simultaneous) scan. */
     .timeout       = 0x0000,						/* No timeout. */
     .scan_phys     = BLE_GAP_PHY_1MBPS,				/* 1Mbps PHY only. */
     .filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL,
@@ -258,7 +258,7 @@ void vBleInit( void )
 							  prvTempTimerCallback		/* Callback for the BLE timer. */
 							);
 	
-	( void )xTimerStart( xTemperatureTimer, portMAX_DELAY );
+	( void )xTimerStart( xTemperatureTimer, BLE_OS_TIMEOUT );
 	
 	/* Create a mutex to protect access to the BLE configuration. */
 	xMutexBleConfig = xSemaphoreCreateMutex();
@@ -519,7 +519,7 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 	int8_t		cTxPower;
 	
 	/* Request access to BLE configuration. */
-	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
 	
 	/* Configure the advertisement:
 	   Advertisement data is in xAdvData.
@@ -579,7 +579,7 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 		( void ) sd_ble_gap_adv_stop( xAdvHandle );
 	
 		/* Start the BLE advertising timer. On expiry, the timer switch between LR and sort range advertising. */
-		( void )xTimerStart( xBleAdvTimer, portMAX_DELAY );	
+		( void )xTimerStart( xBleAdvTimer, BLE_OS_TIMEOUT );	
 
 		/* Configure GAP advertising. */
 		xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
@@ -595,7 +595,7 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 	}
 	else
 	{
-		( void )xTimerStop( xBleAdvTimer, portMAX_DELAY );	
+		( void )xTimerStop( xBleAdvTimer, BLE_OS_TIMEOUT );	
 	}
 		
 	/* Release access to BLE configuration. */
@@ -607,10 +607,10 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 void vStopAdvertising( void )
 {
 	/* Request access to BLE configuration. */
-	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
 
 	NRF_LOG_DEBUG( "Advertising stopped." );	   
-	( void )xTimerStop( xBleAdvTimer, portMAX_DELAY );		
+	( void )xTimerStop( xBleAdvTimer, BLE_OS_TIMEOUT );		
 	( void )sd_ble_gap_adv_stop( xAdvHandle );
   
 	xAdvState = ADV_NONE;
@@ -632,7 +632,7 @@ void vStartScan( portBASE_TYPE xNewScanState )
 	ret_code_t xErrCode;
 	
 	/* Request access to BLE configuration. */
-	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
 	
 	NRF_LOG_DEBUG( "Scanning mode set to %i.", xNewScanState );	   
 	
@@ -645,6 +645,16 @@ void vStartScan( portBASE_TYPE xNewScanState )
 	if ( xNewScanState & SCAN_LR125KBPS )
 	{
 		xScanParam.scan_phys |= BLE_GAP_PHY_CODED;
+	}
+	
+	/* Adapt the scan window to the scan type (mono scan or simultaneous scan). */
+	if ( xScanParam.scan_phys == ( BLE_GAP_PHY_CODED | BLE_GAP_PHY_1MBPS ) )
+	{
+		xScanParam.window = SCAN_WINDOW_DUAL;
+	}
+	else
+	{
+		xScanParam.window = SCAN_WINDOW_MONO;
 	}
 	
 	/* If already scanning, stop scanning. */
@@ -668,7 +678,7 @@ void vStartScan( portBASE_TYPE xNewScanState )
 void vStopScan( void )
 {
 	/* Request access to BLE configuration. */
-	xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
 
 	/* Stop scanning. */
 	NRF_LOG_DEBUG( "Scanning stopped." );	   
@@ -697,11 +707,11 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 
 	( void )xTimer;
 	
-/* Test for concurrent standard / long range advertising requirement. */
+	/* Test for concurrent standard / long range advertising requirement. */
 	if ( xAdvState == ( ADV_STD1MBPS | ADV_LR125KBPS ) )
 	{
 		/* Request access to BLE configuration. */
-		xSemaphoreTake( xMutexBleConfig, portMAX_DELAY );
+		xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
 
 		/* Switch between modes. */
 		if ( xAdvMode == ADV_STD1MBPS )

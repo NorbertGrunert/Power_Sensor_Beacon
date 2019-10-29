@@ -61,10 +61,11 @@
 #define ADV_INTERLEAVING_TIME			10 * portTICKS_PER_100MSEC
 
 /* SCAN_INTERVAL - Scanning interval, determines scan interval in units of 0.625 millisecond. */
-#define SCAN_INTERVAL 					320
+#define SCAN_INTERVAL 					280
 
 /* SCAN_WINDOW - Scanning window, determines scan window in units of 0.625 millisecond. */
-#define SCAN_WINDOW 					160
+#define SCAN_WINDOW_DUAL				140
+#define SCAN_WINDOW_MONO				280
 
 /* Temperature poll interval. */
 #define TEMP_POLL_INTERVAL				20 * portTICKS_PER_SEC
@@ -73,6 +74,8 @@
 #define KNOWN_DEVICE_LIST_LEN			50
 
 #define DEVICE_FILTER_INTERVAL			5 * portTICKS_PER_SEC
+
+#define	BLE_OS_TIMEOUT					( 10 * configTICK_RATE_HZ )
 
 
 /* Public function prototypes. */
