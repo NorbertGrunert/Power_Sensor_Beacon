@@ -32,8 +32,8 @@ void					vCOMOpen( unsigned portBASE_TYPE xComID, signed char *pcUartRxBuffer );
 void 					vCOMClose( unsigned portBASE_TYPE xComID );
 signed portBASE_TYPE 	xStoreRxCharInBuffer( struct COM_PORT *pxCom, signed char cChar );
 signed portBASE_TYPE 	xGetRxCharFromBuffer( unsigned portBASE_TYPE xComID, signed char *pcChar );
-signed char				cGetRxCharFromBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned char ucIdx );
-signed char 			*cGetPointerToBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned char ucIdx );
+signed char				cGetRxCharFromBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned portBASE_TYPE uxIdx );
+signed char 			*cGetPointerToBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned portBASE_TYPE uxIdx );
 signed portBASE_TYPE 	xComReceiveString( unsigned portBASE_TYPE xComID, TickType_t xBlockTime );
 void 					vUartRemoveString( unsigned portBASE_TYPE xComID );
 unsigned portBASE_TYPE 	uxGetNumberOfCharsInBuffer( unsigned portBASE_TYPE xComID );
@@ -58,7 +58,7 @@ NRF_SERIAL_DRV_UART_CONFIG_DEF( mDrvConfigCom0,
 							    UART_DEFAULT_CONFIG_IRQ_PRIORITY );
 
 #define SERIAL_FIFO_TX_SIZE 900					/* Allow for enough space in the TX buffer to accomodate 3 scan reports. */
-#define SERIAL_FIFO_RX_SIZE 300					/* Allow for enough space in the RX buffer to accomodate 1 advertisement packet. */
+#define SERIAL_FIFO_RX_SIZE 600					/* Allow for enough space in the RX buffer to accomodate 1 advertisement packet. */
 
 NRF_SERIAL_QUEUES_DEF( serialQueuesCom0, SERIAL_FIFO_TX_SIZE, SERIAL_FIFO_RX_SIZE );
 
@@ -225,16 +225,16 @@ signed portBASE_TYPE xGetRxCharFromBuffer( unsigned portBASE_TYPE xComID, signed
    The read pointer is not updated.
    Does not check buffer status!
 */
-signed char cGetRxCharFromBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned char ucIdx )
+signed char cGetRxCharFromBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned portBASE_TYPE uxIdx )
 {
-	return *( xCom[ xComID ].pcUartRxBuffer + ( ( xCom[ xComID ].uxUartRxRdIdx + ucIdx ) % uartRX_BUFFER_SIZE ) );
+	return *( xCom[ xComID ].pcUartRxBuffer + ( ( xCom[ xComID ].uxUartRxRdIdx + uxIdx ) % uartRX_BUFFER_SIZE ) );
 }
 /*-----------------------------------------------------------*/
 
 /* Get pointer to character in the RX ring buffer from index. */
-signed char *cGetPointerToBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned char ucIdx )
+signed char *cGetPointerToBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned portBASE_TYPE uxIdx )
 {
-	return xCom[ xComID ].pcUartRxBuffer + ( ( xCom[ xComID ].uxUartRxRdIdx + ucIdx ) % uartRX_BUFFER_SIZE );
+	return xCom[ xComID ].pcUartRxBuffer + ( ( xCom[ xComID ].uxUartRxRdIdx + uxIdx ) % uartRX_BUFFER_SIZE );
 }
 /*-----------------------------------------------------------*/
 

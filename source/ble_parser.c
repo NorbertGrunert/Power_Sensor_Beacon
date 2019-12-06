@@ -333,7 +333,7 @@ static void vSetLR125kbpsAdvData( unsigned portBASE_TYPE uxStrgIdx )
 	portBASE_TYPE		xChrIdx;
 	
 	/* Copy the advertisement data to local buffer (HEX format, max. 256 bytes). */
-	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 256 );
+	prvCopyNFromUartBuffer( uxStrgIdx, cLocalAdvData, 2 * 256 );
 	
 	/* Check the received payload length against the AD field length in the payload. */
 	if (   ( strlen( cLocalAdvData ) > 0 )

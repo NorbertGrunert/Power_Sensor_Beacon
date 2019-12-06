@@ -25,7 +25,7 @@
 #define OP_QUEUES_SIZE          3
 #define APP_TIMER_PRESCALER     NRF_SERIAL_APP_TIMER_PRESCALER
 
-#define uartRX_BUFFER_SIZE		350							/* size in items: max. length of one AT frame + max. number of rx-chars. during one tick */
+#define uartRX_BUFFER_SIZE		600							/* size in items: max. length of one AT frame + max. number of rx-chars. during one tick */
 #define uartTX_BLOCKTIME		( ( TickType_t ) ( 50 / portTICK_RATE_MS ) )	/* wait max. 50ms for TX queue to become available. One character takes about 2ms to send @4800bps. */
 
 
@@ -63,8 +63,8 @@ extern void						vCOMOpen( unsigned portBASE_TYPE xComID, signed char *pcUartRxB
 extern void 					vCOMClose( unsigned portBASE_TYPE xComID );
 extern signed portBASE_TYPE 	xStoreRxCharInBuffer( struct COM_PORT *pxCom, signed char cChar );
 extern signed portBASE_TYPE 	xGetRxCharFromBuffer( unsigned portBASE_TYPE xComID, signed char *pcChar );
-extern signed char				cGetRxCharFromBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned char ucIdx );
-extern signed char 				*cGetPointerToBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned char ucIdx );
+extern signed char				cGetRxCharFromBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned portBASE_TYPE uxIdx );
+extern signed char 				*cGetPointerToBufferWithIndex( unsigned portBASE_TYPE xComID, unsigned portBASE_TYPE uxIdx );
 extern signed portBASE_TYPE 	xComReceiveString( unsigned portBASE_TYPE xComID, TickType_t xBlockTime );
 extern void 					vUartRemoveString( unsigned portBASE_TYPE xComID );
 extern unsigned portBASE_TYPE 	uxGetNumberOfCharsInBuffer( unsigned portBASE_TYPE xComID );
