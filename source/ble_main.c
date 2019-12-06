@@ -378,7 +378,7 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 	const char					cRadiusSignature[] = { 0x1B, 0xFF, 0x18, 0x01 };   
 	bool						bAdvReportUblox; 		
 	bool						bAdvReportRadius;		
-	char						cAdvReportStrg[ 257 ];
+	char						cAdvReportStrg[ 600 ];
 	char						*pcAdvReportStrg;
 	char						cAddrType;
 
