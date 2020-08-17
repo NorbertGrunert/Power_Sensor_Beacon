@@ -13,6 +13,9 @@
 #include "semphr.h"
 #include "drv_uart.h"
 
+#include "ble_gap.h"
+#include "ble_advdata.h"
+
 /* Macros */
 
 #define APP_ERROR_CHECK_ATIF( ERR_STRG, ERR_CODE )								\
@@ -73,10 +76,31 @@
 /* Length of the list of known devices. */
 #define KNOWN_DEVICE_LIST_LEN			50
 
-#define DEVICE_FILTER_INTERVAL			5 * portTICKS_PER_SEC
+/* Length of the list of RSSI per known device. The list has to be sufficiently large to
+   store all RX event RSSIs during once FILTER_INTERVAL (e.g.: FILTER_INTERVAL=10s, devices set
+   to 1 report/s --> RSSI_LIST_LEN = 10). */
+#define RSSI_LIST_LEN					12
 
 #define	BLE_OS_TIMEOUT					( 10 * configTICK_RATE_HZ )
 
+/* Structure to store advertising reports for known devices. */
+struct KNOWN_DEVICE
+{
+	bool						bUsed;								/* The entry in the known device list is used. */
+	uint8_t						ucAddrType;							/* Type of the advertiser address:
+																			BLE_GAP_ADDR_TYPE_PUBLIC   						0x00
+																			BLE_GAP_ADDR_TYPE_RANDOM_STATIC   				0x01 
+																			BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE 	0x02
+																			BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE 0x03
+																			BLE_GAP_ADDR_TYPE_ANONYMOUS 					0x7F		*/
+	uint8_t						pucPeerAddr[ BLE_GAP_ADDR_LEN ];
+	uint16_t					usDataLen;
+	uint8_t						pucData[ 256 ];
+	unsigned char				ucPrimaryPhy;	
+	TickType_t					xRxTimeStamp;
+	int8_t						xRSSI[ RSSI_LIST_LEN ];
+};
+/*-----------------------------------------------------------*/
 
 /* Public function prototypes. */
 extern void vBleInit( void );
@@ -107,6 +131,9 @@ extern QueueHandle_t 		xBleCmdQueue;
 /* Mutex handle to protect access to BLE configuration. */
 extern SemaphoreHandle_t	xMutexBleConfig;
 
+/* Mutex to protect access to the BLE advertiser data in xKnownDeviceList[]. */
+extern SemaphoreHandle_t	xMutexBleAdvData;
+
 /* Advertising data. */
 extern signed char			cEncodedStd1MbpsAdvData[ 100 ];
 extern portBASE_TYPE		xEncodedStd1MbpsAdvDataLen;
@@ -118,5 +145,8 @@ extern uint8_t				cTxPower1Mbps;
 extern uint8_t				cTxPower125kbps;
 extern uint32_t				ul1MbpsAdvInterval;
 extern uint32_t				ul125kbpsAdvInterval;
+
+/* List of known devices. */
+extern struct KNOWN_DEVICE	xKnownDeviceList[ KNOWN_DEVICE_LIST_LEN ];
 
 #endif

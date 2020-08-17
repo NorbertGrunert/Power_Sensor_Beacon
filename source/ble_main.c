@@ -55,6 +55,7 @@
 #include "ble_parser.h"
 #include "ble_main.h"
 #include "utils.h"
+#include "ble_adreport.h"
 /*-----------------------------------------------------------*/
 
 /* Function prototypes. */
@@ -67,10 +68,7 @@ static void vStartUp( void * pvParameter );
 /* Function for handling BLE_GAP_ADV_REPORT events. */
 static void vOnAdvReport( ble_gap_evt_adv_report_t const *pxAdvReport );
 
-/* Function to check if a received BLE advertiser needs to be reported. */
-bool bCheckDeviceToReport( uint8_t *puxDeviceGapAddress, uint8_t uxPhy );
-
- /* Function for handling BLE Stack events. */
+/* Function for handling BLE Stack events. */
 static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext );
 
 /* Initialise the SoftDevice and the BLE event interrupt. */
@@ -103,9 +101,6 @@ void prvBleAdvTimerCallback( TimerHandle_t xBleAdvTimer );
 
 /* Timer callback for periodic temperature sensor polling. */
 void prvTempTimerCallback( TimerHandle_t xTimer );
-
-/* The BLE advertising report handling task. */
-static portTASK_FUNCTION_PROTO( vBleAdHandlerTask, pvParameters );
 /*-----------------------------------------------------------*/
 
 /* Local variables. */
@@ -192,18 +187,8 @@ static uint8_t				xAdvHandle;
 		bit 2				125kbps scanning */
 static portBASE_TYPE		xScanState;
 
-struct 
-{
-	struct 
-	{
-		uint8_t				xGapAddress[ 6 ];
-		TickType_t			xRxTimeStamp;
-		uint8_t				uxPhy;
-	}						xKnownDeviceList[ KNOWN_DEVICE_LIST_LEN ];
-	
-	unsigned portBASE_TYPE	uxLastEntry;
-	
-} xKnownDevices;
+/* List of known devices. */
+struct KNOWN_DEVICE			xKnownDeviceList[ KNOWN_DEVICE_LIST_LEN ];
 
 /* Error string. */
 signed char					cErrorStrg[ 60 ];		
@@ -214,7 +199,10 @@ signed char					cErrorStrg[ 60 ];
 /* Mutex handle to protect access to BLE configuration. */
 SemaphoreHandle_t			xMutexBleConfig;
 
-/* Advertising data. */
+/* Mutex to protect access to the BLE advertiser data in xKnownDeviceList[]. */
+SemaphoreHandle_t			xMutexBleAdvData;
+	
+	/* Advertising data. */
 signed char					cEncodedStd1MbpsAdvData[ 100 ];
 portBASE_TYPE				xEncodedStd1MbpsAdvDataLen;
 signed char					cEncodedLR125kbpsAdvData[ 257 ];
@@ -234,6 +222,8 @@ uint32_t					ul125kbpsAdvInterval;
  */
 void vBleInit( void )
 {
+    unsigned portBASE_TYPE    uxListIdx;
+
 	/* Initialise the BLE stack. The task for handling SoftDevice events is spawned in here. */
 	vBleStackInit();
 	
@@ -248,14 +238,14 @@ void vBleInit( void )
 							  ( void * )0,					/* Init for the ID / expiry count. */
 							  prvBleAdvTimerCallback		/* Callback for the BLE timer. */
 							);
-	
+
 	/* Create temperature sensor timer. */
 	xTemperatureTimer = xTimerCreate
 							( "",			 				/* Timer name for debug. */
 							  TEMP_POLL_INTERVAL	,		/* BLE switch rate between advertising modes. */
 							  pdTRUE,						/* Auto-reload. */
 							  ( void * )0,					/* Init for the ID / expiry count. */
-							  prvTempTimerCallback		/* Callback for the BLE timer. */
+							  prvTempTimerCallback			/* Callback for the temperature sensor timer. */
 							);
 	
 	( void )xTimerStart( xTemperatureTimer, BLE_OS_TIMEOUT );
@@ -263,12 +253,18 @@ void vBleInit( void )
 	/* Create a mutex to protect access to the BLE configuration. */
 	xMutexBleConfig = xSemaphoreCreateMutex();
 	
+	/* Create a mutex to protect access to the BLE advertiser data in xKnownDeviceList[]. */
+	xMutexBleAdvData = xSemaphoreCreateMutex();
+	
 	/* No advertisement data set yet. */
 	xEncodedStd1MbpsAdvDataLen = 0;
 	xEncodedLR125kbpsAdvDataLen = 0;
 	
 	/* Reset the list of known BLE devices. */
-	xKnownDevices.uxLastEntry = 0;
+	for ( uxListIdx = 0; uxListIdx < RSSI_LIST_LEN; uxListIdx++ )
+	{
+		xKnownDeviceList[ uxListIdx ].bUsed = false;
+	}
 }
 /*-----------------------------------------------------------*/
 
@@ -286,82 +282,112 @@ static void vStartUp( void * pvParameter )
 }
 /*-----------------------------------------------------------*/
 
-/* Function to check if a received BLE advertiser needs to be reported. 
-   The function maintains a list of devices already seen before and the time they
-   have been seen last.
-   
-   When called, the function checks if the referenced device is already in
-   the list and has been seen during the last N seconds.
-   If yes, it returns false.
-   
-   If it is in the list but not seen during the last N seconds, the
-   function returns true and updates the time stamp.
-   
-   If the device is not in the list, it is added to the list with the
-   current time stamp and the function returns true.  
-*/
-bool bCheckDeviceToReport( uint8_t *puxDeviceGapAddress, uint8_t uxPhy )
+/*
+ * Store the advertiser in a table. 
+ * The table is read by the periodically called prvBleFilterTimerCallback() function
+ * which determines if an advertiser needs to be sent to the host and its entry 
+ * deleted.
+ */
+void vStoreAdvertiser( ble_gap_evt_adv_report_t xAdvReport )
 {
 	unsigned portBASE_TYPE	uxListIdx;
-	bool					bDeviceFound;
+	unsigned portBASE_TYPE	uxListIdx2;
+	bool					bFound;
 	bool					bDeviceToReport;
 	
 	bDeviceToReport = false;
 	uxListIdx = 0;
-	bDeviceFound = false;
+	bFound = false;
+	
+	/* Take mutex as xKnownDeviceList is also accessed by AD handler. */
+	xSemaphoreTake( xMutexBleAdvData, BLE_OS_TIMEOUT );
 	
 	/* Check if the device is already in the list of known devices. */
 	do
 	{
-		if (   ( memcmp( xKnownDevices.xKnownDeviceList[ uxListIdx ].xGapAddress, puxDeviceGapAddress, 6 ) == 0 )
-			&& ( xKnownDevices.xKnownDeviceList[ uxListIdx ].uxPhy == uxPhy ) )
+		if ( xKnownDeviceList[ uxListIdx ].bUsed )
 		{
-			bDeviceFound = true;
+			if (   ( memcmp( xKnownDeviceList[ uxListIdx ].pucPeerAddr, xAdvReport.peer_addr.addr, 6 ) == 0 )
+				&& ( xKnownDeviceList[ uxListIdx ].ucPrimaryPhy == xAdvReport.primary_phy ) )
+			{
+				bFound = true;
+			}
+			else
+			{
+				uxListIdx++;
+			}
 		}
 		else
 		{
 			uxListIdx++;
 		}
 	}
-	while ( !bDeviceFound && ( uxListIdx < xKnownDevices.uxLastEntry ) ) ;
+	while ( !bFound && ( uxListIdx < KNOWN_DEVICE_LIST_LEN ) ) ;
 	
-	/* If the device is not yet in the list and there is en. Enter it with the current time stamp. */
-	if ( !bDeviceFound )
+	if ( bFound )
 	{
-		if ( xKnownDevices.uxLastEntry < KNOWN_DEVICE_LIST_LEN )
+		/* The device in already in the list. Find the next free entry in the list of already received RSSIs and add the new one. */
+		/* Wipe RSSI list and add RSSI. */
+		uxListIdx2 = 0;
+		do
 		{
-			/* Not in list and still room in the list. */
-			memcpy( xKnownDevices.xKnownDeviceList[ uxListIdx ].xGapAddress, puxDeviceGapAddress, 6 );
-			xKnownDevices.xKnownDeviceList[ uxListIdx ].xRxTimeStamp = xTaskGetTickCount();
-			xKnownDevices.xKnownDeviceList[ uxListIdx ].uxPhy = uxPhy;
-		
-			xKnownDevices.uxLastEntry++;
-		
-			bDeviceToReport = true;
+			bFound = ( xKnownDeviceList[ uxListIdx ].xRSSI[ uxListIdx2++ ] == 0 );
 		}
-		else
+		while ( !bFound && ( uxListIdx2 < RSSI_LIST_LEN ) );
+		
+		if ( bFound ) 
 		{
-			/* Not in list and list is full. Return true to not filter it out. */
-			bDeviceToReport = true;
+			xKnownDeviceList[ uxListIdx ].xRSSI[ --uxListIdx2 ] = xAdvReport.rssi;
 		}
 	}
 	else
 	{
-		/* The device has been found in the list. Check if is has been seen less than N seconds ago. */
-		if ( xTaskGetTickCount() - xKnownDevices.xKnownDeviceList[ uxListIdx ].xRxTimeStamp < DEVICE_FILTER_INTERVAL )
+		/* The device has not been found in the list. Check, if there is a free slot in the list. */
+		uxListIdx = 0;
+		
+		do 
 		{
-			/* The device has been seen less than N seconds ago. So ignore it now. */
-			bDeviceToReport = false;
+			bFound = !xKnownDeviceList[ uxListIdx++ ].bUsed;
+		}
+		while ( !bFound && ( uxListIdx < KNOWN_DEVICE_LIST_LEN ) ) ;
+		
+		if ( bFound )
+		{
+			uxListIdx--;
+			
+			/* Not in list and still room in the list. */
+			memcpy( xKnownDeviceList[ uxListIdx ].pucPeerAddr, xAdvReport.peer_addr.addr, BLE_GAP_ADDR_LEN );
+			xKnownDeviceList[ uxListIdx ].xRxTimeStamp 	= xTaskGetTickCount();
+			xKnownDeviceList[ uxListIdx ].ucAddrType    = xAdvReport.peer_addr.addr_type;
+			xKnownDeviceList[ uxListIdx ].usDataLen 	= xAdvReport.data.len;
+			xKnownDeviceList[ uxListIdx ].ucPrimaryPhy	= xAdvReport.primary_phy;
+			/* Copy the advertiser data. */
+			memcpy( xKnownDeviceList[ uxListIdx ].pucData, xAdvReport.data.p_data, xAdvReport.data.len );
+		
+			/* Wipe RSSI list and add RSSI. */
+			for ( uxListIdx2 = 1; uxListIdx2 < RSSI_LIST_LEN; uxListIdx2++ )
+			{
+				xKnownDeviceList[ uxListIdx ].xRSSI[ uxListIdx2 ] = 0;
+			}
+			xKnownDeviceList[ uxListIdx ].xRSSI[ 0 ] = xAdvReport.rssi ;
+
+            xKnownDeviceList[ uxListIdx ].bUsed = true;
 		}
 		else
 		{
-			/* The device has been seen more than N seconds ago. Report it now and update the time stamp. */
-			xKnownDevices.xKnownDeviceList[ uxListIdx ].xRxTimeStamp = xTaskGetTickCount();
-			bDeviceToReport = true;
+			/* Not in list and list is full. Nothing we can do here but to report it immediately. */
+			/* TODO: add mutex as also called by AD handler. */
+			vSendAdvertiserData( xAdvReport.peer_addr.addr_type, 
+								 xAdvReport.peer_addr.addr, 
+								 xAdvReport.data.len, 
+								 xAdvReport.data.p_data, 
+								 xAdvReport.primary_phy, 
+								 xAdvReport.rssi );
 		}
 	}
 	
-	return bDeviceToReport;
+	/* Give mutex for xKnownDeviceList. */
+	xSemaphoreGive( xMutexBleAdvData );
 }
 /*-----------------------------------------------------------*/
 
@@ -373,14 +399,10 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 	ret_code_t					xErrCode;
 	ble_gap_evt_t const			*pxGapEvt = &pxBleEvt->evt.gap_evt;
 	ble_gap_evt_adv_report_t	xAdvReport = pxGapEvt->params.adv_report;
-	static int8_t				cRssiValue = 0;
 	const char					uTLSignature[]  = { 0xFF, 0x17, 0x00 };
 	const char					cRadiusSignature[] = { 0x1B, 0xFF, 0x18, 0x01 };   
 	bool						bAdvReportUblox; 		
 	bool						bAdvReportRadius;		
-	char						cAdvReportStrg[ 600 ];
-	char						*pcAdvReportStrg;
-	char						cAddrType;
 
     switch ( pxBleEvt->header.evt_id )
     {
@@ -393,54 +415,8 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 			if ( ( bAdvReportUblox  == true ) ||
 				 ( bAdvReportRadius == true ) )
 			{   
-				/* Check if the device has already been seen during the last N seconds.
-				   If not, send the report and update the device' time stamp in the list
-				   of seen devices. */
-				if ( bCheckDeviceToReport( xAdvReport.peer_addr.addr, xAdvReport.primary_phy ) )
-				{  
-					cRssiValue = xAdvReport.rssi;
-
-					switch (xAdvReport.peer_addr.addr_type)
-					{
-						case BLE_GAP_ADDR_TYPE_PUBLIC:							cAddrType = 'p'; break;
-						case BLE_GAP_ADDR_TYPE_RANDOM_STATIC:					cAddrType = 'r'; break;
-						case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE :		cAddrType = 's'; break;
-						case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE:	cAddrType = 'n'; break;
-						case BLE_GAP_ADDR_TYPE_ANONYMOUS:						cAddrType = 'a'; break;
-						default:												cAddrType = 'u'; break;
-					}
-		
-					/* Create a fake ublox scan report. */
-					pcAdvReportStrg = cAdvReportStrg;
-					pcAdvReportStrg += sprintf( pcAdvReportStrg, "+UBTD:%02X%02X%02X%02X%02X%02X%c,%2.2d,\"\",2,",
-												xAdvReport.peer_addr.addr[ 5 ],
-												xAdvReport.peer_addr.addr[ 4 ],
-												xAdvReport.peer_addr.addr[ 3 ],
-												xAdvReport.peer_addr.addr[ 2 ],
-												xAdvReport.peer_addr.addr[ 1 ],
-												xAdvReport.peer_addr.addr[ 0 ],
-												cAddrType,
-												cRssiValue );
-
-					/* Append the advertising data unless ble_gap_adv_report_type_t::status is set to BLE_GAP_ADV_DATA_STATUS_INCOMPLETE_MORE_DATA */
-					if ( xAdvReport.type.status != BLE_GAP_ADV_DATA_STATUS_INCOMPLETE_MORE_DATA )
-					{
-						for ( int idx = 0; idx < xAdvReport.data.len; idx++ )
-						{
-							pcAdvReportStrg += sprintf( pcAdvReportStrg, "%02X", *(xAdvReport.data.p_data + idx ) );
-						}
-					}		  
-
-					/* Add receiving PHY. Coding:
-						1		BLE_GAP_PHY_1MBPS
-						4		BLE_GAP_PHY_CODED   */
-					pcAdvReportStrg += sprintf( pcAdvReportStrg, ",%i\r\n", xAdvReport.primary_phy ); 		 
-		
-					xComSendStringRAM( COM0, cAdvReportStrg );
-				
-					/* Flush the log buffer from time to time. */
-					NRF_LOG_FLUSH();
-				}
+				/* Store the device in the list of known devices. */
+				vStoreAdvertiser( xAdvReport );
 			}
 						
 			/* Continue scanning. */
@@ -630,6 +606,7 @@ portBASE_TYPE xGetAdvState( void )
 void vStartScan( portBASE_TYPE xNewScanState )
 {
 	ret_code_t xErrCode;
+    unsigned portBASE_TYPE    uxListIdx;
 	
 	/* Request access to BLE configuration. */
 	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
@@ -669,14 +646,21 @@ void vStartScan( portBASE_TYPE xNewScanState )
 	
 	xScanState = xNewScanState;
 	
-	/* Reset the list of known BLE devices to start rebuilding it. */
-	xKnownDevices.uxLastEntry = 0;		
+	/* Reset the list of known BLE devices. */
+	for ( uxListIdx = 0; uxListIdx < RSSI_LIST_LEN; uxListIdx++ )
+	{
+		xKnownDeviceList[ uxListIdx ].bUsed = false;
+	}
+	
+	( void )xTimerStart( xBleFilterTimer, BLE_OS_TIMEOUT );
 }
 /*-----------------------------------------------------------*/
 
 /* Stop scanning. */
 void vStopScan( void )
 {
+	( void )xTimerStop( xBleFilterTimer, BLE_OS_TIMEOUT );
+
 	/* Request access to BLE configuration. */
 	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
 

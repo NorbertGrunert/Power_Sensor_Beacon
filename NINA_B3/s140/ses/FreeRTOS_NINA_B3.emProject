@@ -114,6 +114,7 @@
       <file file_name="../../../source/ble_parser.c" />
       <file file_name="../../../source/utils.c" />
       <file file_name="../../../source/ble_main.c" />
+      <file file_name="../../../source/ble_adreport.c" />
       <file file_name="../../../source/nrf_sdh_freertos.c" />
       <file file_name="../../../version.c" />
     </folder>

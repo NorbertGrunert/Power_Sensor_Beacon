@@ -19,12 +19,13 @@
 /* Task stack sizes. The idle task and timer stack sizes are defined in FreeRTOSConfig.h */
 #define bleSTACK_SIZE				( ( unsigned short ) 1024 )
 #define bleParserSTACK_SIZE			( ( unsigned short ) 1024 )
+#define bleAdHandlerSTACK_SIZE		( ( unsigned short ) 1024 )
 
 
 /* Task priority definitions. */
 #define SD_TASK_PRIORITY			( tskIDLE_PRIORITY + 4 )
-#define BLE_ADHANDLER_PRIORITY		( tskIDLE_PRIORITY + 2 )
 #define BLE_PARSER_TASK_PRIORITY	( tskIDLE_PRIORITY + 3 )
+#define BLE_ADHANDLER_PRIORITY		( tskIDLE_PRIORITY + 2 )
 #define LEDTGL_TASK_PRIORITY		( tskIDLE_PRIORITY + 1 )
 /* Timer priority is + 4 ! Defined in FreeRTOSConfig.h. */
 

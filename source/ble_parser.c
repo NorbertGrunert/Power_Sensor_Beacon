@@ -32,6 +32,7 @@
 #include "version.h"
 #include "drv_uart.h"
 #include "ble_parser.h"
+#include "ble_adreport.h"
 #include "ble_main.h"
 #include "utils.h"
 /*-----------------------------------------------------------*/
@@ -68,6 +69,10 @@ static void vGetAdvState( unsigned portBASE_TYPE uxStrgIdx );
 static void vSetScanState( unsigned portBASE_TYPE uxStrgIdx );
 /* Get scan state. */
 static void vGetScanState( unsigned portBASE_TYPE uxStrgIdx );
+/* Set RSSI filter algorithm configuration. */
+static void vSetRssiCfg( unsigned portBASE_TYPE uxStrgIdx );
+/* Get RSSI filter algorithm configuration. */
+static void vGetRssiCfg( unsigned portBASE_TYPE uxStrgIdx );
 /* Set output power. */
 static void vSetPower( unsigned portBASE_TYPE uxStrgIdx );
 /* Get output power. */
@@ -101,6 +106,8 @@ char pcAt_UBtPwr[]		= "AT+UBTPWR=";
 char pcAt_UBtPwrQ[]		= "AT+UBTPWR?";
 char pcAt_UBtAdvInt[]	= "AT+UBTADVINT=";
 char pcAt_UBtAdvIntQ[]	= "AT+UBTADVINT?";
+char pcAt_UBtRssiCfg[]	= "AT+UBTRSSICFG=";
+char pcAt_UBtRssiCfgQ[]	= "AT+UBTRSSICFG?";
 
 /* Table containing pointers to the AT response strings, parameters to be stored
    (if any) and the AT response ID to be sent to the BLE task via queue. */
@@ -120,6 +127,8 @@ static const struct xAT_CMD xAtCmd[] =
 	 { pcAt_UBtPwrQ, 				vGetPower,					AT_NOMSG						},
 	 { pcAt_UBtAdvInt,				vSetAdvInterval,			AT_NOMSG						},
 	 { pcAt_UBtAdvIntQ,				vGetAdvInterval,			AT_NOMSG						},
+	 { pcAt_UBtRssiCfg,				vSetRssiCfg,				AT_NOMSG						},
+	 { pcAt_UBtRssiCfgQ,			vGetRssiCfg,				AT_NOMSG						},
 	 { pcAt_At, 	 				vOk,						AT_NOMSG						}
 };
 /*-----------------------------------------------------------*/
@@ -525,6 +534,38 @@ static void vGetAdvInterval( unsigned portBASE_TYPE uxStrgIdx )
 }
 /*-----------------------------------------------------------*/
 
+/* Set RSSI filter algorithm configuration. */
+static void vSetRssiCfg( unsigned portBASE_TYPE uxStrgIdx )
+{
+	unsigned short		usRssiParameter;
+	signed char			cOctetStrg[ 5 ];
+	
+	prvCopyNFromUartBuffer( uxStrgIdx, cOctetStrg, 4 );
+	usRssiParameter = usHexStrgToShort( cOctetStrg );
+	
+	uxRssiFilterMethod = ( unsigned char )( ( usRssiParameter >> 13 ) & 0x07 );
+	uxRssiFilterWindow = ( unsigned char )( ( usRssiParameter >>  8 ) & 0x1F );
+
+	/* Set the values. */
+	xComSendStringRAM( COM0, "\r\nOK\r\n" );
+}
+/*-----------------------------------------------------------*/
+
+/* Get RSSI filter algorithm configuration. */
+static void vGetRssiCfg( unsigned portBASE_TYPE uxStrgIdx )
+{
+	signed char		cRespStrg[ 30 ];
+	
+	/* Check, if the received string is terminated here. In this case, treat the command. */
+	if ( cGetRxCharFromBufferWithIndex( COM0, uxStrgIdx++ ) == 0 )
+	{
+		sprintf( cRespStrg, "\r\n+UBTRSSICFG:%4.4X\r\nOK\r\n",    ( ( unsigned short )uxRssiFilterMethod << 13 ) 
+																+ ( ( unsigned short )uxRssiFilterWindow <<  8 ) );
+		
+		xComSendStringRAM( COM0, cRespStrg );
+	}	
+}
+/*-----------------------------------------------------------*/
 /* Set output power. */
 static void vSetPower( unsigned portBASE_TYPE uxStrgIdx )
 {

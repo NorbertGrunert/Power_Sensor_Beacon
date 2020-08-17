@@ -34,6 +34,7 @@
 #include "rtc_blink.h"
 #include "ble_main.h"
 #include "ble_parser.h"
+#include "ble_adreport.h"
 
 #include "nrf_temp.h"		// DEBUG DEBUG DEBUG
 #include "nrf_delay.h"
@@ -67,6 +68,9 @@ int main(void)
 	
 	/* Initialise the BLE parser task. */
 	vBleParserInit( BLE_PARSER_TASK_PRIORITY );
+	
+	/* Initialise the advertising reporting task. */
+	vBleAdReportInit();
 
     /* Activate deep sleep mode */
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
