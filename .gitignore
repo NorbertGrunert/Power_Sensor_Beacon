@@ -21,3 +21,4 @@
 *.uvprojx
 *.icf
 license.txt
+**/version.c

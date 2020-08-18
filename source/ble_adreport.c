@@ -323,45 +323,45 @@ static void vBleAdHandlerTask( void * pvParameter )
 													
 													// DEBUG DEBUG DEBUG
 													// Also send the RSSI buffer.
-													{
-														char				*pcAdvReportStrg;
-														char				cAddrType;
-														char				cAdvReportStrg[ 600 ];
+													// {
+														// char				*pcAdvReportStrg;
+														// char				cAddrType;
+														// char				cAdvReportStrg[ 600 ];
 														
-														switch ( xKnownDeviceList[ uxListIdx ].ucAddrType )
-														{
-															case BLE_GAP_ADDR_TYPE_PUBLIC:							cAddrType = 'p'; break;
-															case BLE_GAP_ADDR_TYPE_RANDOM_STATIC:					cAddrType = 'r'; break;
-															case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE :		cAddrType = 's'; break;
-															case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE:	cAddrType = 'n'; break;
-															case BLE_GAP_ADDR_TYPE_ANONYMOUS:						cAddrType = 'a'; break;
-															default:												cAddrType = 'u'; break;
-														}
+														// switch ( xKnownDeviceList[ uxListIdx ].ucAddrType )
+														// {
+															// case BLE_GAP_ADDR_TYPE_PUBLIC:							cAddrType = 'p'; break;
+															// case BLE_GAP_ADDR_TYPE_RANDOM_STATIC:					cAddrType = 'r'; break;
+															// case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE :		cAddrType = 's'; break;
+															// case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE:	cAddrType = 'n'; break;
+															// case BLE_GAP_ADDR_TYPE_ANONYMOUS:						cAddrType = 'a'; break;
+															// default:												cAddrType = 'u'; break;
+														// }
 
-														pcAdvReportStrg = cAdvReportStrg;
-														pcAdvReportStrg += sprintf( pcAdvReportStrg, "+DBG: %02X%02X%02X%02X%02X%02X%c,",
-																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 5 ],
-																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 4 ],
-																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 3 ],
-																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 2 ],
-																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 1 ],
-																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 0 ],
-																					cAddrType );
-														for ( int idx = 0; idx < RSSI_LIST_LEN; idx++ )
-														{
-															if ( xKnownDeviceList[ uxListIdx ].xRSSI[ idx ] != 0 )
-															{
-																pcAdvReportStrg += sprintf( pcAdvReportStrg, "%2.2d,", xKnownDeviceList[ uxListIdx ].xRSSI[ idx ] );
-															}
-														}	
+														// pcAdvReportStrg = cAdvReportStrg;
+														// pcAdvReportStrg += sprintf( pcAdvReportStrg, "+DBG: %02X%02X%02X%02X%02X%02X%c,",
+																					// xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 5 ],
+																					// xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 4 ],
+																					// xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 3 ],
+																					// xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 2 ],
+																					// xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 1 ],
+																					// xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 0 ],
+																					// cAddrType );
+														// for ( int idx = 0; idx < RSSI_LIST_LEN; idx++ )
+														// {
+															// if ( xKnownDeviceList[ uxListIdx ].xRSSI[ idx ] != 0 )
+															// {
+																// pcAdvReportStrg += sprintf( pcAdvReportStrg, "%2.2d,", xKnownDeviceList[ uxListIdx ].xRSSI[ idx ] );
+															// }
+														// }	
 														
-														pcAdvReportStrg += sprintf( pcAdvReportStrg, "\r\n" ); 		 
+														// pcAdvReportStrg += sprintf( pcAdvReportStrg, "\r\n" ); 		 
 
-														xComSendStringRAM( COM0, cAdvReportStrg );
+														// xComSendStringRAM( COM0, cAdvReportStrg );
 														
-														/* Flush the log buffer from time to time. */
-														NRF_LOG_FLUSH();
-													}
+														// /* Flush the log buffer from time to time. */
+														// NRF_LOG_FLUSH();
+													// }
 
 													/* Clear the list entry. */
 													xKnownDeviceList[ uxListIdx ].bUsed = false;
