@@ -8,6 +8,7 @@
 /* Standard include files. */
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
 
 
 /* nRF include files */
@@ -172,7 +173,7 @@ int8_t xFilterRSSI( int8_t *pxRSSIList )
 {
 	unsigned portBASE_TYPE		uxListIdx;
     int8_t                     	xRSSI;
-	signed int					iAvgRSSI;
+	double						dAvgRSSI;
 	signed int					iMaxRSSI;
 	unsigned int				uiRSSICnt;
     
@@ -180,20 +181,21 @@ int8_t xFilterRSSI( int8_t *pxRSSIList )
 	{
 		case RSSI_AVG:		/* Build a simple average over all captured RSSI values. */
 							uiRSSICnt = 0;
-                            iAvgRSSI = 0;
+                            dAvgRSSI = 0;
 							for ( uxListIdx = 0; uxListIdx < RSSI_LIST_LEN; uxListIdx++ )
 							{
 								if ( *( pxRSSIList + uxListIdx ) != 0 )
 								{
 									uiRSSICnt++;
-									iAvgRSSI += ( signed int )*( pxRSSIList + uxListIdx );
-								}
-								else
-								{
-									/* Last entry. Return the average RSSI. */
-									return ( int8_t )( ( ( float )iAvgRSSI / ( float )uiRSSICnt ) - 0.5 );
+									dAvgRSSI += pow( 10.0, ( double )*( pxRSSIList + uxListIdx ) / 10.0 );
 								}
 							}
+
+							/* Last entry. Return the average RSSI. */
+							dAvgRSSI /= ( double )uiRSSICnt;
+							xRSSI = ( int8_t )( 10.0 * log10( dAvgRSSI )  - 0.5 );
+							return xRSSI;
+
 							break;
 		
 		case RSSI_MAXAVG:	/* Build the average of all RSSI values which are not smaller than 5dB below the maximum value. */
@@ -212,21 +214,23 @@ int8_t xFilterRSSI( int8_t *pxRSSIList )
 							/* Now average all values which are higher that the maximum RSSI - 5dB. */
 							iMaxRSSI -= 5;
 							uiRSSICnt = 0;
-							iAvgRSSI = 0;
+							dAvgRSSI = 0;
 							for ( uxListIdx = 0; uxListIdx < RSSI_LIST_LEN; uxListIdx++ )
 							{
 								if ( *( pxRSSIList + uxListIdx ) != 0 )
 								{
 									if ( *( pxRSSIList + uxListIdx ) > iMaxRSSI )
 									{
-										iAvgRSSI += ( signed int )*( pxRSSIList + uxListIdx );
 										uiRSSICnt++;
+										dAvgRSSI += pow( 10.0, ( double )*( pxRSSIList + uxListIdx ) / 10.0 );
 									}
 								}
 							}
 							
 							/* Last entry. Return the average RSSI. The -0.5 converts truncating to rounding. */
-							return ( int8_t )( ( ( float )iAvgRSSI / ( float )uiRSSICnt ) - 0.5 );
+							dAvgRSSI /= ( double )uiRSSICnt;
+							xRSSI = ( int8_t )( 10.0 * log10( dAvgRSSI )  - 0.5 );
+							return xRSSI;
 							
 							break;
 		
@@ -239,12 +243,11 @@ int8_t xFilterRSSI( int8_t *pxRSSIList )
 								{
 									xRSSI = *( pxRSSIList + uxListIdx );
 								}
-								else
-								{
-									/* Last entry. Return the RSSI found so far. */
-									return xRSSI;
-								}
 							}
+							
+							/* Last entry. Return the RSSI found so far. */
+							return xRSSI;
+
 							break;
 	}
 
@@ -318,47 +321,47 @@ static void vBleAdHandlerTask( void * pvParameter )
 																		 xKnownDeviceList[ uxListIdx ].ucPrimaryPhy, 
 																		 xRSSI );
 													
-//													// DEBUG DEBUG DEBUG
-//													// Also send the RSSI buffer.
-//													{
-//														char				*pcAdvReportStrg;
-//														char				cAddrType;
-//														char				cAdvReportStrg[ 600 ];
-//														
-//														switch ( xKnownDeviceList[ uxListIdx ].ucAddrType )
-//														{
-//															case BLE_GAP_ADDR_TYPE_PUBLIC:							cAddrType = 'p'; break;
-//															case BLE_GAP_ADDR_TYPE_RANDOM_STATIC:					cAddrType = 'r'; break;
-//															case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE :		cAddrType = 's'; break;
-//															case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE:	cAddrType = 'n'; break;
-//															case BLE_GAP_ADDR_TYPE_ANONYMOUS:						cAddrType = 'a'; break;
-//															default:												cAddrType = 'u'; break;
-//														}
-//
-//														pcAdvReportStrg = cAdvReportStrg;
-//														pcAdvReportStrg += sprintf( pcAdvReportStrg, "+DBG: %02X%02X%02X%02X%02X%02X%c,",
-//																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 5 ],
-//																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 4 ],
-//																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 3 ],
-//																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 2 ],
-//																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 1 ],
-//																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 0 ],
-//																					cAddrType );
-//														for ( int idx = 0; idx < RSSI_LIST_LEN; idx++ )
-//														{
-//															if ( xKnownDeviceList[ uxListIdx ].xRSSI[ idx ] != 0 )
-//															{
-//																pcAdvReportStrg += sprintf( pcAdvReportStrg, "%2.2d,", xKnownDeviceList[ uxListIdx ].xRSSI[ idx ] );
-//															}
-//														}	
-//														
-//														pcAdvReportStrg += sprintf( pcAdvReportStrg, "\r\n" ); 		 
-//
-//														xComSendStringRAM( COM0, cAdvReportStrg );
-//														
-//														/* Flush the log buffer from time to time. */
-//														NRF_LOG_FLUSH();
-//													}
+													// DEBUG DEBUG DEBUG
+													// Also send the RSSI buffer.
+													{
+														char				*pcAdvReportStrg;
+														char				cAddrType;
+														char				cAdvReportStrg[ 600 ];
+														
+														switch ( xKnownDeviceList[ uxListIdx ].ucAddrType )
+														{
+															case BLE_GAP_ADDR_TYPE_PUBLIC:							cAddrType = 'p'; break;
+															case BLE_GAP_ADDR_TYPE_RANDOM_STATIC:					cAddrType = 'r'; break;
+															case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE :		cAddrType = 's'; break;
+															case BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE:	cAddrType = 'n'; break;
+															case BLE_GAP_ADDR_TYPE_ANONYMOUS:						cAddrType = 'a'; break;
+															default:												cAddrType = 'u'; break;
+														}
+
+														pcAdvReportStrg = cAdvReportStrg;
+														pcAdvReportStrg += sprintf( pcAdvReportStrg, "+DBG: %02X%02X%02X%02X%02X%02X%c,",
+																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 5 ],
+																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 4 ],
+																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 3 ],
+																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 2 ],
+																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 1 ],
+																					xKnownDeviceList[ uxListIdx ].pucPeerAddr[ 0 ],
+																					cAddrType );
+														for ( int idx = 0; idx < RSSI_LIST_LEN; idx++ )
+														{
+															if ( xKnownDeviceList[ uxListIdx ].xRSSI[ idx ] != 0 )
+															{
+																pcAdvReportStrg += sprintf( pcAdvReportStrg, "%2.2d,", xKnownDeviceList[ uxListIdx ].xRSSI[ idx ] );
+															}
+														}	
+														
+														pcAdvReportStrg += sprintf( pcAdvReportStrg, "\r\n" ); 		 
+
+														xComSendStringRAM( COM0, cAdvReportStrg );
+														
+														/* Flush the log buffer from time to time. */
+														NRF_LOG_FLUSH();
+													}
 
 													/* Clear the list entry. */
 													xKnownDeviceList[ uxListIdx ].bUsed = false;
