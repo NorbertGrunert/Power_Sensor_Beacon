@@ -401,7 +401,7 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 	ble_gap_evt_adv_report_t	xAdvReport = pxGapEvt->params.adv_report;
 	const char					uTLSignature[]  = { 0xFF, 0x17, 0x00 };
 	const char					cRadiusSignature[]  = { 0x1B, 0xFF, 0x18, 0x01 };   
-	const char					cIBeaconSignature[] = { 0x1A, 0xFF, 0x4C, 0x00 };   
+	const char					cIBeaconSignature[] = { 0x1A, 0xFF, 0x4C, 0x00, 0x02, 0x15 };   
 	bool						bAdvReportUblox; 		
 	bool						bAdvReportRadius;		
 	bool						bAdvReportIBeacon;		
@@ -413,7 +413,7 @@ static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 			/* Check if the adv report is sent from one of the recognised devices. */
 			bAdvReportUblox   = ( strncmp(     uTLSignature, xAdvReport.data.p_data + 4, 3 ) == 0 );
 			bAdvReportRadius  = ( strncmp( cRadiusSignature, xAdvReport.data.p_data + 3, 4 ) == 0 );
-			bAdvReportIBeacon = ( strncmp( cIBeaconSignature, xAdvReport.data.p_data + 3, 4 ) == 0 );
+			bAdvReportIBeacon = ( strncmp( cIBeaconSignature, xAdvReport.data.p_data + 3, 6 ) == 0 );
 
 			if ( ( bAdvReportUblox   == true ) ||
 				 ( bAdvReportRadius  == true ) ||
