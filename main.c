@@ -22,6 +22,7 @@
 #include "nrf_drv_rtc.h"
 #include "nrf_serial.h"
 #include "nrf_drv_rng.h"
+#include "nrf_power.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -45,6 +46,9 @@ int main(void)
 {
     ret_code_t xErrCode;
 	
+	/* Enable DC/DC converter. */
+    nrf_power_dcdcen_set( true );
+
     xErrCode = NRF_LOG_INIT( NULL );
     APP_ERROR_CHECK( xErrCode );
 
@@ -53,7 +57,7 @@ int main(void)
     /* Initialize clock driver for better time accuracy in FREERTOS */
     xErrCode = nrf_drv_clock_init();
     APP_ERROR_CHECK(xErrCode);
-
+	
 	/* Initialise serial interface. */
     vUartPortInit();
 	

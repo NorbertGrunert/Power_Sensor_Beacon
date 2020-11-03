@@ -162,6 +162,9 @@
       <file file_name="C:/Nordic/nRF5_SDK_15.2.0_9412b96/components/softdevice/common/nrf_sdh_ble.c" />
       <file file_name="C:/Nordic/nRF5_SDK_15.2.0_9412b96/components/softdevice/common/nrf_sdh_soc.c" />
     </folder>
+    <configuration
+      Name="Release"
+      debug_register_definition_file="C:/Nordic/nRF5_SDK_15.2.0_9412b96/modules/nrfx/mdk/nrf52840.svd" />
   </project>
   <configuration
     Name="Release"
