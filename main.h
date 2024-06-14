@@ -9,42 +9,29 @@
 #define MAIN_H
 
 #include "FreeRTOS.h"
+#include "nrf_drv_wdt.h"
 
-#define VERSION						"NINA-B3"
+#define BAD_FW_RESET_CNT			( 30 )
 
-#define	portTICKS_PER_100MSEC		( configTICK_RATE_HZ / 10 )
-#define	portTICKS_PER_SEC			( configTICK_RATE_HZ )
-#define	portTICKS_PER_MIN			( 60 * portTICKS_PER_SEC )
-
-/* Task stack sizes. The idle task and timer stack sizes are defined in FreeRTOSConfig.h */
-#define bleSTACK_SIZE				( ( unsigned short ) 1024 )
-#define bleParserSTACK_SIZE			( ( unsigned short ) 1024 )
-#define bleAdHandlerSTACK_SIZE		( ( unsigned short ) 1024 )
+#define ERROR_STACK_DUMP_LEN		( 20 )			/* Length of stack dumped to persistent RAM in reset case. */
 
 
-/* Task priority definitions. */
-#define SD_TASK_PRIORITY			( tskIDLE_PRIORITY + 4 )
-#define BLE_PARSER_TASK_PRIORITY	( tskIDLE_PRIORITY + 3 )
-#define BLE_ADHANDLER_PRIORITY		( tskIDLE_PRIORITY + 2 )
-#define LEDTGL_TASK_PRIORITY		( tskIDLE_PRIORITY + 1 )
-/* Timer priority is + 4 ! Defined in FreeRTOSConfig.h. */
+/* Public function prototypes. */
+/* Set the bad boot counter in the system error record to 0. */
+extern void vResetBadBootCounter( void );
 
+/* Application error handler. */
+extern void app_error_fault_handler( uint32_t uiId, uint32_t uiPc, uint32_t uiInfo );
+/*-----------------------------------------------------------*/
 
-enum xMEM_TYPE
-{
-	ROM,				/* Flash memory. */
-	RAM,				/* RAM */
-	EEPROM				/* EEPROM */
-};
+/* Global variables. */
+/* Watchdog channel ID. Needs to be used when feeding the watchdog. */
+extern nrf_drv_wdt_channel_id 		xWdtChannelId;
 
-/* Flags for some data copy routines in different modules to translate apostrophes to quotation marks. */
-#define TRANSLATE_APOSTR		true
-#define NO_TRANSLATE_CHR		false
-
-/* Helper macros to print defines during compile time. */
-#define VALUE_TO_STRING(x) #x
-#define VALUE(x) VALUE_TO_STRING(x)
-#define VAR_NAME_VALUE(var) #var "="  VALUE(var)
-
+/* Persistent memory section containing variables pertaining to the watchdog and software resets. */
+extern long __attribute__( (section ( ".non_init" ) ) ) 				ulErrorId;
+extern long __attribute__( (section ( ".non_init" ) ) ) 				ulErrorPc;
+extern struct xERROR_INFO __attribute__( ( section( ".non_init" ) ) )	xErrorInfo;
+extern uint32_t __attribute__( ( section( ".non_init" ) ) ) 			uiErrorStack[ ERROR_STACK_DUMP_LEN ];
 
 #endif

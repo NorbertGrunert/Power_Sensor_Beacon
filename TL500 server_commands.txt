@@ -1,0 +1,627 @@
+VERSION?										HW=TL502-RELEASE, 						Query tracker version
+												IMEI=860873040337015,
+												ICCID=89332401000016963726, 
+												FW=TL500_v8.6-15-gfb464c6 Feb 8 2024 17:13:11, 
+												Module=BG600LM3LAR02A04_01.200.01.200, 
+												Chip=AAD0, 
+												Softdevice=0x58F0, 
+												BLE=0xD4CA6E4252B6, 
+												BL=TL500_Bootloader_v1.0-12-g7a40ef4 Jan 26 2024 14:58:00}
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+RESET											OK										Soft-reset tracker
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+VIBRATE=<hex-byte>[,<hex-byte>[,<hex-byte>]]	OK										Vibrate for the specified on-duration (first 
+																							parameter, in units of 100ms, <=25s) 
+																							followed by an off-period (second parameter, 
+																							optional, in units of 100ms, <=25s) for a 
+																							number of times (third parameter, optional).
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+LED=<hex-short>[,<hex-byte>]					OK										Switch LEDs on for specified on-duration 
+																							(first parameter, in seconds). The 
+																							second parameter specifies the LED(s): 0x01 = red, 
+																							0x02 = green, 0x04 = blue.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+MOD_SIDE?										MOD_SIDE=0x0000							Query for which foot the module has been configured:
+																								0x0000	right foot
+																								0x0001	left foot
+MOD_SIDE=<hex-short>							OK										Configure on which foot the module has to be used.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+RELAY_CMD=<string>,<string>[,<hex-short>]		OK										Send a command to another device via BLE broadcast.
+																								1st parameter: IMEI of the destination device.
+																								2nd parameter: command.
+																								3rd parameter: optional command argument.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+DFMAP?											DFMAP=0x1BFFFFB							Query DFMAP
+DFMAP=<hex-long>								OK										Set DFMAP. Note that Tracker ID and IND fields cannot 
+																							be disabled.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BATT_EMPTY_THRES?								BATT_EMPTY_THRES=0x05AD					Read battery empty voltage threshold (no communication).
+																						Default 3.3V. Steps:
+																								TL500:      1.465mV
+BATT_EMPTY_THRES=<hex-short>					OK										Write battery empty voltage threshold. The value is in steps of:
+																								TL500:      1.465mV
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BATT_LOW_THRES?									BATT_LOW_THRES=0x0646					Read battery low voltage threshold (LED flashing red).
+																						Default 3.65V. Steps:
+																								TL500:      1.465mV
+BATT_LOW_THRES=<hex-short>						OK										Write battery low voltage threshold. The value is in steps of:
+																								TL500:      1.465mV
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BATT_FULL_THRES?								BATT_FULL_THRES=0x070C					Read battery full voltage threshold (LED flashing blue).
+																						Default 4.1V. Steps:
+																								TL500:      1.465mV
+BATT_FULL_THRES=<hex-short>						OK										Write battery full voltage threshold. The value is in steps of:
+																								TL500:      1.465mV
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BATT_LOOP_INTERVAL?								BATT_LOOP_INTERVAL=0x0050				Read the time interval in which the battery voltage is periodically 
+																						measured. The value is in steps of 100ms.
+																						Default 8s.
+BATT_LOOP_INTERVAL=<hex_short>					OK										Write the time interval in which the battery voltage is periodically 
+																						measured. The value is in steps of 100ms.
+
+
+==============================================================================================================================================================
+
+
+EVACUATE=<hex-byte>								OK										Alert the user of an evacuation alert (vibration). 
+																							Each evacuation must have a different ID from the 
+																							previous one to be taken into account. 
+																							0xFF is a reserved value.
+																							1st parameter: EVAC_ID
+EVACUATION_STOP									OK										Stop any ongoing evacuation alert.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+EVAC_VIBR?										EVAC_VIBR=0x0A,0x01,0x03				Query evacuation vibration.
+																								1st parameter: on-time in steps of 100ms, <=25s
+																								2nd parameter: off-period in steps of 100ms, <=25s
+																								3rd parameter: repetitions
+EVAC_VIBR=<hex-byte>,<hex-byte>,<hex-byte>		OK										Set evacuation vibration parameters.
+
+==============================================================================================================================================================
+
+STANDBY_MODE									OK										Go to STANDBY state.
+NORMAL_MODE										OK										Leave STANDBY state and resume normal operation.
+OOO_MODE										OK										Go to Out-of-Office state.
+STATE?											INACTIVE								Query tracker state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ALERT_ACK										OK										Acknowledge alert message.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GOTO_PREALERT									OK										Let the tracker enter PREALERT state and start 
+																							the prealert vibrations. If not acknowledged, 
+																							the device will enter ALERT.
+
+
+==============================================================================================================================================================
+
+
+GPRSCFG?										’internet.sierrawireless.com’			Query GPRS connection configuration.
+GPRSCFG=<string>								OK										Set GPRS connection configuration.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+TCPCFG?											’lnr.xsole.net’,9000					Query TCP connection configuration.
+TCPCFG=<string>									OK										Set TCP connection configuration.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SECTCPCFG?										’lnr.xsole.net’,9003					Query secure TCP connection configuration
+SECTCPCFG=<string>								OK										Set secure TCP connection configuration.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SEC_ENABLE?										SEC_ENABLE=0x0001						Query secure connection enable. 0x0000 means disabled, 
+																								0x0001 means enabled
+																								Default: enabled
+SEC_ENABLE=<hex-short>							OK										Set secure connection enable
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+RAT?											RAT=0x0790								Query radio access technology (RAT) priorities.
+																							Format:
+																								0x0<1st RAT><2nd RAT><3rd RAT>
+																							<RAT>:
+																								7    LTE-M1
+																								8    NB-IOT1
+																								9    GPRS
+																								0    none
+																							Highest priority RAT <1st RAT> cannot be <none>. 
+																								Default: 0x0790
+RAT=<hex-short>									OK										Set RAT priorities.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ATT_TO?											ATT_TO=0xEA60							Query timeout for attachment to the network before 
+																							attempting any recovery mechanisms.
+																								Unit: 0x0001 corresponds to 10ms. Default: 0xEA60 (10min)
+ATT_TO=<hex-short>								OK										Set network attachment timeout.
+
+
+==============================================================================================================================================================
+
+
+ACT_POS_INT?									ACT_POS_INT=0x003C						Query position update send interval in ACTIVE state.
+																								Default: 1min
+																								Unit: 0x0001 corresponds to 1s.
+ACT_POS_INT=<hex-short>							OK										Set position update send interval in ACTIVE state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+INACT_POS_INT?									INACT_POS_INT=0x0078					Query position update send interval in INACTIVE state.
+																								Default: 2min
+																								Unit: 0x0001 corresponds to 1s.
+INACT_POS_INT=<hex-short>						OK										Set position update send interval in INACTIVE state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+STILL_POS_INT?									STILL_POS_INT=0x00B4					Query position update send interval in STILL state.
+																								Default: 3min
+																								Unit: 0x0001 corresponds to 1s.
+STILL_POS_INT=<hex-short>						OK										Set position update send interval in STILL state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SLEEP_POS_INT?									SLEEP_POS_INT=0x0708					Query position update send interval in SLEEP state.
+																								Default: 30min
+																								Unit: 0x0001 corresponds to 1s.
+SLEEP_POS_INT=<hex-short>						OK										Set position update send interval in SLEEP state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+OOO_POS_INT?									OOO_POS_INT=0x00258						Query position update send interval in OOO state.
+																								Default: 10min
+																								Unit: 0x0001 corresponds to 1s.
+OOO_POS_INT=<hex-short>							OK										Set position update send interval in OOO state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+CHRG_POS_INT?									CHRG_POS_INT=0x0078						Query position update send interval in CHARGING state.
+																								Default: 2min
+																								Unit: 0x0001 corresponds to 1s.
+CHRG_POS_INT=<hex-short>						OK										Set position update send interval in CHARGING state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ALERT_POS_INT?									ALERT_POS_INT=0x001E					Query position update send interval in ALERT state.
+																								Default: 30s
+																								Unit: 0x0001 corresponds to 1s.
+ALERT_POS_INT=<hex-short>						OK										Set position update send interval in ALERT state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+MOD_PWRDWN_INT?									MOD_PWRDWN_INT=0x014A					Query minimal position update send interval in order to power-down 
+																							the GSM/GPS module in between transmissions.
+																								Default: 330s
+																								Unit: seconds.
+MOD_PWRDWN_INT=<hex-short>						OK										Set minimal position update send interval in order to power-down 
+																							the GSM/GPS module in between transmissions.
+
+
+==============================================================================================================================================================
+
+
+GPS_ENABLE?										GPS_ENABLE=0x0001						Query position acquisition enable. 
+																							0x0000 means disabled, 0x0001 means enabled.
+GPS_ENABLE=<hex-short>							OK										Set GPS position acquisition enable.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_PSM?										GPS_PSM=0x0970							Query GPS Power Save Mode (PSM).
+																							Format:
+																								0x0<1st RAT><2nd RAT><3rd RAT>
+																							with <RAT>:
+																								0x0000    maximum power, 
+																										  maximum performance.
+																								0x0001    balanced (best power 
+																										  consumption at max.
+																										  performance)
+																								0x0002    aggressive in ACTIVE 
+																										  state
+																								0x0003    always aggressive (min. 
+																										  power consumption)
+																							Default: 0x0000
+GPS_PSM=<hex-short>								OK										Set GPS Power Save Mode.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_LOCESTSRV?									GPS_LOCESTSRV=’xsole.net’				Query the HTTP server address for the XSole location 
+																							estimation.
+																							TL320 and newer only.
+GPS_LOCESTSRV=<string>							OK										Configure the HTTP server address for the XSole location 
+																							estimation.
+																							TL320 and newer only.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_POSREC?										GPS_POSREC=0x0001						Query the position recording mode. 
+																								0x0001   Recording enable.
+																								0x0003   Recording debug mode.
+																							In debug mode, positions are transmitted to the server 
+																							as usual and recorded simultaneously to verify 
+																							consistency.
+																							Note: TL500 and newer only.
+GPS_POSREC=<hex-short>							OK										Set the position recording mode. Note: TL500 and newer 
+																							only.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_POSREC_PKT_INT?								GPS_POSREC_PKT_INT=0x0E10				Query the Hello packet interval in position recording.
+																								0x0000		never send a packet
+																								0x0001		packet interval in s
+																								-
+																								0xFFFE
+																								0xFFFF		synchronise to GPS sat data download
+																							Default: 0xFFFF
+																							Unit: s
+																							Note: TL500 and newer only.
+GPS_POSREC_PKT_INT=0x<hex-short>				OK										Set the Hello packet interval in position recording.
+																							Note: TL500 and newer only.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_PWRDWN_INT?									GPS_PWRDWN_INT=0x003C					Query minimal position update send interval in order to power-down 
+																							the GPS module only in between transmissions.
+																							Default: 60s.
+																							Unit: 0x0001 corresponds to 1s.
+GPS_PWRDWN_INT=<hex-short>						OK										Set minimal position update send interval in order to power-down 
+																							the PS module only in between transmissions.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_FIX_QUALITY?								GPS_FIX_QUALITY=0x0096					Query GPS fix quality criterion (10 times the HDOP).
+																							Default: 150
+GPS_FIX_QUALITY=<hex-short>						OK										Set GPS fix quality criterion (10 times the HDOP).
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_H_ACCURACY?									GPS_H_ACCURACY=0x00C8					Query GPS fix quality criterion (horizontal accuracy improvement 
+																							within 2 seconds).
+																								Default: 200
+																								Unit: cm
+																							(TL400 and later only)
+GPS_H_ACCURACY=<hex-short>						OK										Set GPS fix quality criterion (horizontal accuracy improvement 
+																							within 2 seconds).
+																							(TL400 and later only)
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_MAX_TIME_WAIT_FOR_FIX?						GPS_MAX_TIME_WAIT_FOR_FIX=0x2328		Query maximum time to wait for a sufficiently good GPS fix before 
+																							sending a position update.
+																								Default: 90s
+																								Unit: 0x0001 corresponds to 10ms.
+GPS_MAX_TIME_WAIT_FOR_FIX=<hex-short>			OK										Set maximum time to wait for a sufficiently good GPS fix before 
+																							sending a position update.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+GPS_MAX_TIME_WAIT_FOR_SAT?						GPS_MAX_TIME_WAIT_FOR_SAT=0x0BB8		Query maximum time to wait for at least 2 GPS satellites to be 
+																							received before sending a position update.
+																								Default: 30s
+																								Unit: 0x0001 corresponds to 10ms.
+GPS_MAX_TIME_WAIT_FOR_SAT=<hex-short>			OK										Set maximum time to wait for at least 2 GPS satellites before 
+																							sending a position update.
+
+
+==============================================================================================================================================================
+
+
+STEP_ACC_THRES?									STEP_ACC_THRES=0x1800					Query minimum acceleration threshold for step detection
+																							Default: 1.5g
+																							Unit: 0x0010 corresponds to 3.9mg.
+STEP_ACC_THRES=<hex-short>						OK										Set minimum acceleration threshold for step detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+STEP_MIN_INTERVAL?								STEP_MIN_INTERVAL=0x0046				Query minimum interval between acceleration peaks for step detection.
+																							Default: 0.7s
+																							Unit: 0x0001 corresponds to 10ms.
+STEP_MIN_INTERVAL=<hex-short>					OK										Set minimum interval between acceleration peaks for step detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+STEP_MAX_INTERVAL?								STEP_MAX_INTERVAL=0x015E				Query maximum interval between acceleration peaks for step detection.
+																							Default: 3.5s
+																							Unit: 0x0001 corresponds to 10ms.
+STEP_MAX_INTERVAL=<hex-short>					OK										Set maximum interval between acceleration peaks for step detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ACTIVE_NUM_STEPS?								ACTIVE_NUM_STEPS=0x0006					Query the number of detected steps for going to ACTIVE state.
+																							Default: 6
+ACTIVE_NUM_STEPS=<hex-short>					OK										Set the number of detected steps for going to ACTIVE state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+STILL_DURATION?									STILL_DURATION=0x0014					Query minimum duration of a period without acceleration event 
+																							for passing into STILL state.
+																								Default: 20s 
+																								Unit: 0x0001 corresponds to 1s.
+STILL_DURATION=<hex-short>						OK										Set minimum duration for passing into STILL state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SLEEP_DURATION?									SLEEP_DURATION=0x0258					Query minimum duration of a period without acceleration event 
+																							for passing into SLEEP state.
+																								Default: 600s 
+																								Unit: 0x0001 corresponds to 1s.
+																							Note: Due to implementation, the range is limited to 655s.
+SLEEP_DURATION=<hex-short>						OK										Set minimum duration for passing into SLEEP state.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ABNORMAL_POS_Z_ACC_THRES?			`			ABNORMAL_POS_Z_ACC_THRES=0x0600			Query maximum acceleration (tilt angle) on the z-axis for abnormal 
+																							position detection.
+																								Default: 68°
+ABNORMAL_POS_Z_ACC_THRES=<hex-short>			OK										Set maximum acceleration on the z-axis for abnormal position detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ABNORMAL_DURATION?								ABNORMAL_DURATION=0x0032				Query minimum duration for abnormal position detection 
+																							(2.5 samples/second).
+																								Default: 20s
+																								Unit: 0x0001 corresponds to 0.4s
+ABNORMAL_DURATION=<hex-short>					OK										Set minimum duration for abnormal position detection (in samples).
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ABNORMAL_MAX_ORIENT_CHG?						ABNORMAL_MAX_ORIENT_CHG=0x0265			Query maximum acceleration change on any axis for abnormal 
+																							position detection (spatial orientation change).
+																								Default: 0.15g
+																								Unit: 0x0010 corresponds to 3.9mg.
+ABNORMAL_MAX_ORIENT_CHG=<hex-short>				OK										Set maximum acceleration change on any axis for abnormal 
+																							position detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+IMMOBILITY_DURATION?							IMMOBILITY_DURATION=0x0028				Query duration for immobility detection.
+																								Default: 40s
+																								Unit: 0x0001 corresponds to 1s
+IMMOBILITY_DURATION=<hex-short>					OK										Set duration immobility detection (in seconds).
+
+
+==============================================================================================================================================================
+
+
+SOS_ACC_THRES?									SOS_ACC_THRES=0x4000					Query minimum acceleration threshold for SOS detection.
+																								Default: 4.0g
+																								Unit: 0x0010 corresponds to 3.9mg.
+SOS_ACC_THRES=<hex-short>						OK										Set minimum acceleration threshold for SOS detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SOS_MIN_X_ACC_THRES?							SOS_MIN_X_ACC_THRES=0x0333				Query minimum X-acceleration threshold for SOS detection.
+																								Default: 0.2g
+																								Unit: 0x0010 corresponds to 3.9mg.
+SOS_MIN_X_ACC_THRES=<hex-short>					OK										Set minimum X-acceleration threshold for SOS detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SOS_MIN_Z_ACC_THRES?							SOS_MIN_Z_ACC_THRES=0x0999				Query minimum Z-acceleration threshold for SOS detection.
+																								Default: 0.6g
+																								Unit: 0x0010 corresponds to 3.9mg.
+SOS_MIN_Z_ACC_THRES=<hex-short>					OK										Set minimum Z-acceleration threshold for SOS detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SOS_MAX_Z_ACC_THRES?							SOS_MAX_Z_ACC_THRES=0x2000				Query maximum Z-acceleration threshold for SOS detection.
+																								Default: 2.0g
+																								Unit: 0x0010 corresponds to 3.9mg.
+SOS_MAX_Z_ACC_THRES=<hex-short>					OK										Set maximum Z-acceleration threshold for SOS detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SOS_MIN_INTERVAL?								SOS_MIN_INTERVAL=0x001E					Query minimum interval between acceleration peaks for SOS detection.
+																								Default: 0.3s
+																								Unit: 0x0001 corresponds to 10ms.
+SOS_MIN_INTERVAL=<hex-short>					OK										Set minimum interval between acceleration peaks for SOS detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SOS_MAX_INTERVAL?								SOS_MAX_INTERVAL=0x00FA					Query maximum interval between acceleration peaks for SOS detection.
+																								Default: 2.5s
+																								Unit: 0x0001 corresponds to 10ms.
+SOS_MAX_INTERVAL=<hex-short>					OK										Set maximum interval between acceleration peaks for SOS detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SOS_NUM_PEAKS?									SOS_NUM_PEAKS=0x0003					Query the number of taps necessary for SOS detection.
+																							Default: 3
+SOS_NUM_PEAKS=<hex-short>						OK										Set the number of taps necessary for SOS detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ALERT_CNCL_METHOD?								ALERT_CNCL_METHOD=0x0000				Query the alert cancel method.
+																								0x0000 Cancel by taps.
+																								0x0001 Cancel by any movement.
+																								Default: Cancel by taps.
+ALERT_CNCL_METHOD=<hex-short>					OK										Set the alert cancel method.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ALERT_CNCL_ACC_THRES?							ALERT_CNCL_ACC_THRES=0x0010				Query minimum acceleration peak threshold for alert/SOS cancel 
+																							(tap) detection.
+																								Default: 1.0g
+																								Unit: 0x0001 corresponds to 63mg.
+ALERT_CNCL_ACC_THRES=<hex-short>				OK										Set minimum acceleration peak threshold for alert/SOS cancel detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ALERT_CNCL_MIN_INTERVAL?						ALERT_CNCL_MIN_INTERVAL=0x0010			Query minimum interval between taps for alert/SOS cancel detection.
+																								Default: 0.16s
+																								Unit: 0x0001 corresponds to 10ms.
+ALERT_CNCL_MIN_INTERVAL=<hex-short>				OK										Set minimum interval between taps for alert/SOS cancel detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ALERT_CNCL_MAX_INTERVAL?						ALERT_CNCL_MAX_INTERVAL=0x0064			Query maximum interval between taps for alert/SOS cancel detection.
+																								Default: 0.3s
+																								Unit: 0x0001 corresponds to 10ms.
+ALERT_CNCL_MAX_INTERVAL=<hex-short>				OK										Set maximum interval between taps for alert/SOS cancel detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ALERT_CNCL_NUM_PEAKS?							ALERT_CNCL_NUM_PEAKS=0x0003				Query the number of taps necessary for alert/SOS cancel detection.
+																								Default: 3
+ALERT_CNCL_NUM_PEAKS=<hex-short>				OK										Set the number of taps necessary for alert/SOS cancel detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ALERT_CNCL_TIMEOUT?								ALERT_CNCL_TIMEOUT=0x001E				Query the timeout for alert cancel detection.
+																								Default: 30s
+ALERT_CNCL_TIMEOUT=<hex-short>					OK										Set the timeout for alert cancel detection.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SOS_CNCL_TIMEOUT?								SOS_CNCL_TIMEOUT=0x0004					Query the timeout for SOS cancel detection.
+																								Default: 4s
+SOS_CNCL_TIMEOUT=<hex-short>					OK										Set the timeout for SOS cancel detection.
+
+
+==============================================================================================================================================================
+
+
+NOABN_ENABLE?									NOABN_ENABLE=0x0000						Query if the NOABN command is enabled.
+																								0x0000 means disabled, 0x0001 means enabled.
+																								Default: disabled.
+NOABN_ENABLE=<hex-short>						OK										Enable the NOABN command.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+NOABN_NUM_PEAKS?								NOABN_NUM_PEAKS =0x0005					Query the number of taps for the NOABN command.
+																								Default: 5
+NOABN_NUM_PEAKS=<hex-short>						OK										Set the number of taps for the NOABN command.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+NOABN_MAX_PERIOD?								NOABN_MAX_PERIOD =0x04B0				Query maximum duration for which the NOABN command is active.
+																								Default: 20min
+																								Unit: 0x0001 corresponds to 1s.
+NOABN_MAX_PERIOD=<hex-short>					OK										Set maximum duration for which the NOABN command is active..
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+NOABN_WINDOW?									NOABN_WINDOW=0x003C						Query the maximum distance of abnormal position detections to keep 
+																							NOABN command active.
+																								Default: 1min
+																								Unit: 0x0001 corresponds to 1s.
+NOABN_WINDOW=<hex-short>						OK										Set the maximum distance of abnormal position detections to keep 
+																							NOABN command active.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+NOABN_CMDACK_ON?								NOABN_CMDACK_ON=0x0003					Query the duration of a single NOABN command confirmation vibration.
+																								Default: 300ms
+																								Unit: 0x0001 corresponds to 100ms.
+NOABN_CMDACK_ON=<hex-short>						OK										Set the duration of a single NOABN command confirmation vibration..
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+NOABN_CMDACK_OFF?								NOABN_CMDACK_OFF=0x0001					Query the distance of consecutive  NOABN command confirmation vibrations.
+																								Default: 100ms
+																								Unit: 0x0001 corresponds to 100ms.
+NOABN_CMDACK_OFF=<hex-short>					OK										Set the distance of consecutive  NOABN command confirmation vibrations.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+NOABN_CMDACK_REP?								NOABN_CMDACK_REP=0x000F					Query the number of NOABN command confirmation vibrations.
+																								Default: 15
+NOABN_CMDACK_REP=<hex-short>					OK										Set the number of NOABN command confirmation vibrations.
+
+
+==============================================================================================================================================================
+
+
+BLE_ENABLE?										BLE_ENABLE=0x0001						Query BLE scan enable. 0x0000 means disabled, 0x0001 means enabled.
+																								Default: enabled
+BLE_ENABLE=<hex-short>							OK										Set BLE scan enable.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_STD_ADV_INT?								BLE_STD_ADV_INT=0x2000					Query BLE standard advertising interval used outside ALERT/SOS.
+																								Default: 5.12s 
+																								Unit: 0x0001 corresponds to 625us.
+BLE_STD_ADV_INT=<hex-short>						OK										Set BLE scan interval.
+																								Unit: 0x0001 corresponds to 625us.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_SCAN_FIX_ONLY?								BLE_SCAN_FIX_ONLY=0x0000				Query whether BLE scan is allowed during GPS fix attempts only.
+																								0x0000 Scan always.
+																								0x0001 Scan during GPS fixes 
+																											 only.
+																								Default: always.
+BLE_SCAN_FIX_ONLY=<hex-short>					OK										Set whether BLE scan is allowed during GPS fix attempts only.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_UPDATE_INT?									BLE_UPDATE_INT=0x1E						Query BLE beacon data update interval.
+																								Default: 30s 
+																								Unit: 0x01 corresponds to 1s.
+BLE_UPDATE_INT=<hex-byte>						OK										Set BLE beacon data update interval.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_KEY=<hex-byte>,<hex-128bit>					OK										Set BLE beacon encryption key.
+																								1st parameter: key index (0 or 1)
+																								2nd parameter: AES-128 key
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_DFMAP?										BLE_DFMAP= 0x0007FFBF					Query the BLE DFMAP
+BLE_DFMAP=<hex-long>							OK										Set the BLE DFMAP.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_TXPWR?										BLE_DFMAP=0x06							Query the BLE transmit power.
+BLE_TXPWR=<hex-byte>							OK										Set the BLE transmit power. Valid values are:
+																								0x00    0 dBm
+																								0x04    4 dBm
+																								0x06    6 dBm
+																								0x08   	8 dBm
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+NOABN_BCN_THRES?								NOABN_BCN_THRES =0x80					Query the RSSI threshold for accepting ‘no abnormal position zone’ beacons.
+NOABN_BCN_THRES=<hex-byte>						OK										Set the RSSI threshold for accepting ‘no abnormal position zone’ 
+																							beacons. The value is the RSSI in dBm expressed as signed HEX number.
+																							Default: -128dBm
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+DANGER_BCN_THRES?								DANGER_BCN_THRES =0x80					Query the RSSI threshold for accepting ‘danger zone’ beacons.
+DANGER_BCN_THRES=<hex-byte>						OK										Set the RSSI threshold for accepting ‘danger zone’ beacons. The value 
+																							is the RSSI in dBm expressed as signed HEX number.
+																								Default: -128dBm
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+PRIVATE_BCN_THRES?								PRIVATE_BCN_THRES=0x80					Query the RSSI threshold for accepting ‘private zone’ beacons.
+PRIVATE_BCN_THRES=<hex-byte>					OK										Set the RSSI threshold for accepting ‘private zone’ beacons. The 
+																							value is the RSSI in dBm expressed as signed HEX number.
+																								Default: -128dBm
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+IMMOBILITY_BCN_THRES?							IMMOBILITY_BCN_THRES=0x80				Query the RSSI threshold for accepting ‘immobility zone’ beacons.
+IMMOBILITY_BCN_THRES=<hex-byte>					OK										Set the RSSI threshold for accepting ‘immobility zone’ beacons. 
+																							The value is the RSSI in dBm expressed as signed HEX number.
+																								Default: -128dBm
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_RSSI_CFG?									BLE_RSSI_CFG=0x4A00						Query the RSSI filtering configuration.
+BLE_RSSI_CFG=<hex-short>						OK										Configure the RSSI filtering:
+																								bit 15:13: filter algorithm:
+																									0x00    no filtering
+																									0x01    average
+																									0x02    average over all values > (max RSSI – 5dB)
+																								bit 12:8: filter window length, <=31s
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_MIN_BCN?									BLE_MIN_BCN=0x0005						Query the minimum number of beacons required to allow for replacing 
+																							GPS fixes by BLE localisation. The GPS will then be shut down.
+BLE_MIN_BCN=<hex-short>							OK										Configure the minimum number of beacons required to allow for replacing 
+																							GPS fixes by BLE localisation.
+																								Default: 5
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_IN_DANGER_DUR?								BLE_IN_DANGER_DUR=0x001E				Query the time the module is assumed to be in a danger zone after 
+																							reception of a danger beacon.
+																								Unit: seconds
+BLE_IN_DANGER_DUR=<hex-short>					OK										Configure the time the module is assumed to be in a danger zone after 
+																							reception of a danger beacon.
+																								Default: 30s
+																								Unit: seconds
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_FOREIGN_DANGER?								BLE_FOREIGN_DANGER=0x0033				Query if the module reacts on danger indications from other modules 
+																							with danger vibration.
+BLE_FOREIGN_DANGER=<hex-short>					OK										Bit mask to configure if the module reacts on danger indications from 
+																							other modules with danger vibration.
+																								bit 0:  DANGER on short range
+																								bit 1:  DANGER on long range
+																								bit 2:  ALERT on short range
+																								bit 3:  ALERT on long range
+																								bit 4:  SOS on short range
+																								bit 5:  SOS on long range Default: all bits 0 (do not react)
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_MAX_WAIT_FOR_BCN?							BLE_MAX_WAIT_FOR_BCN=0x000A				Query the time the module is scanning for BLE beacons before attempting 
+																							a GPS fix.
+																								Unit: seconds
+BLE_MAX_WAIT_FOR_BCN=<hex-short>				OK										Configure the time the module is scanning for BLE beacons before 
+																							attempting a GPS fix.
+																								Default: 10s
+																								Unit: seconds
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_BCN_UUID?									BLE_BCN_UUID=0x00:						Query the UUID filter 0 or 1 setting for BLE beacons. BLE beacons 
+												0x00112233445566778899AABBCCDDEEFF, 	matching this UUID are reported with major/minor fields instead of 
+												0x01:									their advertiser address.
+												0x0123456789ABCDEF0123456789ABCDEF		
+BLE_BCN_UUID=<hex-byte>,<hex-128bit>			OK										Configure the UUID filter 0 or 1 setting for BLE beacons. BLE beacons 
+																						matching this UUID are reported with major/minor fields instead of 
+																						their advertiser address.
+																							1st parameter: index (0 or 1)
+																							2nd parameter: 16byte UUID
+																						A UUID of all ‘0’s is equivalent to disabling that filter.
+																						A UUID of all ‘F’s is equivalent to a pass-through filter which 
+																						accepts all iBeacons.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+BLE_BCN_FILTER?									BLE_BCN_FILTER=0x0000					Query the BLE beacon filter configuration. 
+BLE_BCN_FILTER=<hex-short>						OK										Configure the beacon filter. This filter determines how localiser beacons
+																		   				are stored in the xBleLocBcnGSM and xBleLocBcnBLE tables. 
+																		   						bit [ 2:0]:	Beacon replacement option.
+																											For received beacons for which is there is already an 
+																											entry in the table:
+																											0	A newer one always replaces the present entry. 
+																											    Only the RSSI and RX timestamp are updated.
+																											1	As option 0.
+																											2	A newer one only replaces the present entry if its 
+																											    RSSI is higher.
+																											3	A newer one only replaces the present entry if its 
+																											    RSSI is higher and higher than the beacon's reference 
+																												RSSI (RSSI_REF) + BCN_REF_RSSI_OFFSET.
+																											To decide which entry to replace if the table is full:
+																											0	Replace the oldest entry.
+																											1	Replace the entry with the lowest RSSI.
+																											2	As option 1.
+																											3	As option 1.
+																								bit [15:8]:	Offset to the beacon's reference RSSI. This is a
+																											signed 8-bit value (range -128dB...+127dB). */
+
+==============================================================================================================================================================
+
+
+FS_LST=<hex-byte>[,<options>]					FS_LST='fwupd.hex','rbfw.hex'			Get a listing of files on the file system.
+																						Parameters:
+																							param   options
+																							0		--			list files
+																							1		--			show remaining free space
+																							2		'<file>'	list size of file
+
+FS_GET=’<file name>’,’<uid>’,’<pw>’				OK										Download file from local module file system to FTP server.
+	   [,<target file name>]																Target file name: TL500 and later only.
+
+FS_PUT=’<file name>’,’<uid>’,’<pw>’				OK										Upload file from FTP server to local module file system.
+	   [,<target file name>]																Target file name: TL500 and later only.
+
+FS_DEL=’<file name>’							OK										Delete file from local file system.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+FTPSRV?											FTPSRV=’firmup.xsole.net’				Query FTP server configuration.
+FTPSRV=<string>									OK										Set FTP server configuration (URL or IP address).
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+FTP_CFG?										FTPSRV=6,1								Query FTP client configuration.
+FTP_CFG=<string>								OK										Set FTP client configuration (e.g. FTP mode).
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+FWUPD=[’<filename>’],[’<UID>’],					FWUPD_ONGOING							Firmware update over the air.
+	  [’<PW>’][,<mode>]							OK										The parameter <mode> exists only for TL500 and later. Furthermore, 
+	  																							<filename>,<UID> and <PW> are optional if <mode> is provided.
+
+
+==============================================================================================================================================================
+
+
+PEEK_RAM=<hex-long>,<hex-byte>					PEEK_RAM: 0x2000F708=0x27,0x00,0x54		Peek memory contents (NVDS or RAM) at the given long absolute memory 
+																						address. The byte parameter defines the number of bytes to be read.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+POKE_RAM=<hex-long>,<hex-byte>					OK										Poke a byte value to the RAM at the given short address.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+PEEK_NVDS=<hex-long>,<hex-byte>					PEEK_NVDS: 0x00027000=0x34,0x12			Peek memory (NVDS or RAM) contents at the given long absolute memory 
+																							address. The byte parameter defines the number of bytes to be read.
+POKE_NVDS=<hex-long>,<hex-byte>					OK										Poke a byte value to the NVDS configuration memory at the given long 
+																							address. The address is the offset into the configuration record. 
+																							The configuration record checksum will be automatically updated.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+LOG_ENABLE?										LOG_ENABLE=0x0001						Query error logging enable. 0x0000 means disabled, 0x0001 means enabled.
+LOG_ENABLE=<hex-short>							OK										Set error logging enable. When enabled, any errors and unusual 
+																							events are logged into the ‘TRACE.LOG’ file on the G350 file 
+																							system. The file can be retrieved via FTP. 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+STATS?											STATS:0xC331,0x0000,0x0005,0x0000,		Read tracker statistics.
+												0x0004,0x0000,0x0004,0x0003,0x0000,
+												0x0000,0x0002,0x0000,0x0045,0x54A3,		
+												0x0000,0x0000,0x0000		
+RESSTATS										OK										Reset the statistics counters.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+TEST_START										OK-ACC/VIBR TEST RESULT: P/P			Start the tracker self-test. The device needs to be on the charger. 
+												or:											Following the test start command, the device will send its position 
+												OK-ACC/VIBR TEST RESULT: F/P (0120)			and any BLE beacons received. Immediately, it returns accelerometer 
+																							and vibration motor test results (P = passed, F = failed).
+																							In case of a test fail, a hexadecimal 4-digit error code might be 
+																							appended.
+TEST_STOP										OK										Stop the self-test.
+

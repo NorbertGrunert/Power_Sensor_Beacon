@@ -20,5 +20,8 @@
 *.uvoptx
 *.uvprojx
 *.icf
+*.scr
+*.c00k!e
+*.session
 license.txt
 **/version.c

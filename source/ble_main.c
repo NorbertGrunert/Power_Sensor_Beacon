@@ -1,7 +1,7 @@
 /*
  * Tracker Firmware
  *
- * BLE task
+ * BLE Main
  *
  */
 
@@ -9,8 +9,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include "tracker.h"
 
-/* nRF include files */
+/* nRF SDK include files */
 #include "nordic_common.h"
 #include "nrf.h"
 #include "ble.h"
@@ -32,9 +33,11 @@
 #include "app_timer.h"
 #include "app_error.h"
 
-#include "boards.h"
+#include "custom_board.h"
 
+#define NRF_LOG_MODULE_NAME 		BLE_MAIN
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 #include "nrf_log_backend_flash.h"
@@ -50,23 +53,32 @@
 
 
 /* Device specific include files. */
-#include "main.h"
+#include "drv_adc.h"
 #include "drv_uart.h"
-#include "ble_parser.h"
-#include "ble_main.h"
-#include "utils.h"
+
 #include "ble_adreport.h"
+#include "ble_ctrl.h"
+#include "ble_main.h"
+#include "config.h"
+#include "main.h"
+#include "rtc.h"
+#include "trace.h"
+#include "tracemsg.h"
+#include "utils.h"
 /*-----------------------------------------------------------*/
 
 /* Function prototypes. */
 /* Initialise the BLE task. */
-void vBleInit( void );
+void vBleMainInit( void );
 
 /* Startup function. */
 static void vStartUp( void * pvParameter );
 
 /* Function for handling BLE_GAP_ADV_REPORT events. */
 static void vOnAdvReport( ble_gap_evt_adv_report_t const *pxAdvReport );
+
+/* Check if the beacon's UUID is in the list of configured UUID filters. */
+static bool bFilterUUID( unsigned char *pucBeaconUuid, unsigned char *pucUuidFilterMatchIdx );
 
 /* Function for handling BLE Stack events. */
 static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext );
@@ -88,30 +100,31 @@ void vStopAdvertising( void );
 void vStartScan( portBASE_TYPE xNewScanState );
 
 /* Stop advertising. */
-void StopScan( void );
+void vStopScan( void );
 
-/* Return advertising state. */
-portBASE_TYPE xGetAdvState( void );
+/* Set RSSI filter algorithm configuration. */
+void vSetRssiCfg( unsigned portBASE_TYPE uxFilterMethod, unsigned portBASE_TYPE uxFilterWindow );
 
-/* Return scan state. */
-portBASE_TYPE xGetScanState( void );
+/* Set TX power. */
+void vSetTxPower( enum xIF_TYPE xRfInterface, unsigned portBASE_TYPE uxTxPower );
+
+/* Set the advertising interval. */
+void vSetAdvInterval( enum xIF_TYPE xRfInterface, unsigned long ulAdvInterval );
+
+/* Set the advertising payload: Initialise. 
+   Fill the first three bytes of the pyload with the AD flag. */
+void vSetAdvPayloadInit( enum xIF_TYPE xRfInterface );
+
+/* Set the advertising payload. */
+void vSetAdvPayload( enum xIF_TYPE xRfInterface, unsigned char *pucAdvPayload, unsigned portBASE_TYPE uxAdvPayloadLen );
 
 /* Timer callback for periodic BLE beacon scans. */
-void prvBleAdvTimerCallback( TimerHandle_t xBleAdvTimer );
-
-/* Timer callback for periodic temperature sensor polling. */
-void prvTempTimerCallback( TimerHandle_t xTimer );
+static void vBleAdvTimerCallback( TimerHandle_t xBleAdvTimer );
 /*-----------------------------------------------------------*/
 
 /* Local variables. */
-/* UART Rx character ring buffer */
-signed char					cBleUartRxBuffer[ bleUART_RX_BUFFER_SIZE ];
-
 /* Timer handle for the BLE advertising timer. */
 static TimerHandle_t 		xBleAdvTimer;	
-
-/* Timer handle for the temperature capture timer. */
-static TimerHandle_t 		xTemperatureTimer;	
 
 /* Buffer where advertising reports will be stored by the SoftDevice. */
 static uint8_t				cScanBufferData[ BLE_GAP_SCAN_BUFFER_EXTENDED_MIN ]; 
@@ -171,7 +184,7 @@ ble_gap_adv_params_t		xAdvParams =
 	},
 	.p_peer_addr			= NULL,
 	.filter_policy			= BLE_GAP_ADV_FP_ANY,
-	.interval				= ADV_INTERVAL,
+	.interval				= BLE_ADV_INTVL_STD,
 	.duration				= 0,
 
 	.primary_phy			= BLE_GAP_PHY_1MBPS,		
@@ -192,10 +205,14 @@ struct KNOWN_DEVICE			xKnownDeviceList[ KNOWN_DEVICE_LIST_LEN ];
 
 /* Error string. */
 signed char					cErrorStrg[ 60 ];		
+
+/* On-duration counters for the BLE RF module. The counter is reset every time a packet has been 
+   sent to the server using the interface function. */
+TickType_t					xBleOnTimeStamp;
+TickType_t					xBleOnDuration;
 /*-----------------------------------------------------------*/
 
 /* Public variables. */
-
 /* Mutex handle to protect access to BLE configuration. */
 SemaphoreHandle_t			xMutexBleConfig;
 
@@ -215,41 +232,32 @@ uint8_t						cTxPower125kbps;
 /* Advertising intervals for long and short range. */
 uint32_t					ul1MbpsAdvInterval;
 uint32_t					ul125kbpsAdvInterval;
+
+/* Enable for UUID filtering of received iBeacons. */
+bool						bBleUuidFilterEnable;
 /*-----------------------------------------------------------*/
 
 /* 
  * Initialise the BLE task. 
  */
-void vBleInit( void )
+void vBleMainInit( void )
 {
     unsigned portBASE_TYPE    uxListIdx;
 
 	/* Initialise the BLE stack. The task for handling SoftDevice events is spawned in here. */
-	vBleStackInit();
+	#if !defined ( NO_SOFTDEVICE )
+		vBleStackInit();
+	#endif
 	
-	/* Open the COM port with the physical UART RX buffer. */
-	vCOMOpen( COM0, cBleUartRxBuffer );
-
 	/* Create advertisement timer. */
 	xBleAdvTimer = xTimerCreate
-							( "",			 				/* Timer name for debug. */
+							( "ADV",		 				/* Timer name for debug. */
 							  ADV_INTERLEAVING_TIME	,		/* BLE switch rate between advertising modes. */
 							  pdTRUE,						/* Auto-reload. */
 							  ( void * )0,					/* Init for the ID / expiry count. */
-							  prvBleAdvTimerCallback		/* Callback for the BLE timer. */
+							  vBleAdvTimerCallback			/* Callback for the BLE timer. */
 							);
 
-	/* Create temperature sensor timer. */
-	xTemperatureTimer = xTimerCreate
-							( "",			 				/* Timer name for debug. */
-							  TEMP_POLL_INTERVAL	,		/* BLE switch rate between advertising modes. */
-							  pdTRUE,						/* Auto-reload. */
-							  ( void * )0,					/* Init for the ID / expiry count. */
-							  prvTempTimerCallback			/* Callback for the temperature sensor timer. */
-							);
-	
-	( void )xTimerStart( xTemperatureTimer, BLE_OS_TIMEOUT );
-	
 	/* Create a mutex to protect access to the BLE configuration. */
 	xMutexBleConfig = xSemaphoreCreateMutex();
 	
@@ -265,6 +273,18 @@ void vBleInit( void )
 	{
 		xKnownDeviceList[ uxListIdx ].bUsed = false;
 	}
+	
+	/* Initialise BLE on-duration counter. */
+	xBleOnTimeStamp = 0;
+	xBleOnDuration = 0;
+
+	/* Preliminary initialisation of the UUID filter enable variable. 
+	   The variable will be finally initialised once the NVDS module has loaded
+	   the configuration record. */
+	bBleUuidFilterEnable = true;
+
+	NRF_LOG_INFO( "Module initialised." );
+	NRF_LOG_FLUSH();
 }
 /*-----------------------------------------------------------*/
 
@@ -273,11 +293,8 @@ void vBleInit( void )
  */
 static void vStartUp( void * pvParameter )
 {
-	ret_code_t xErrCode;
-
     ( void )pvParameter;
 	
-	xComSendStringRAM( COM0, "\r\n+STARTUP\r\n" );
 	NRF_LOG_FLUSH();
 }
 /*-----------------------------------------------------------*/
@@ -288,7 +305,7 @@ static void vStartUp( void * pvParameter )
  * which determines if an advertiser needs to be sent to the host and its entry 
  * deleted.
  */
-void vStoreAdvertiser( ble_gap_evt_adv_report_t xAdvReport )
+void vStoreAdvertiser( ble_gap_evt_adv_report_t xAdvReport, enum xBLE_BCN_FORMAT xBcnFormat, unsigned char ucUuidFilterMatchIdx )
 {
 	unsigned portBASE_TYPE	uxListIdx;
 	unsigned portBASE_TYPE	uxListIdx2;
@@ -300,7 +317,11 @@ void vStoreAdvertiser( ble_gap_evt_adv_report_t xAdvReport )
 	bFound = false;
 	
 	/* Take mutex as xKnownDeviceList is also accessed by AD handler. */
-	xSemaphoreTake( xMutexBleAdvData, BLE_OS_TIMEOUT );
+	if ( !xSemaphoreTake( xMutexBleAdvData, BLE_OS_TIMEOUT ) )
+	{
+		/* Could not obtain the mutex. Now just ignore the report. */			
+		return;
+	}
 	
 	/* Check if the device is already in the list of known devices. */
 	do
@@ -357,12 +378,13 @@ void vStoreAdvertiser( ble_gap_evt_adv_report_t xAdvReport )
 			
 			/* Not in list and still room in the list. */
 			memcpy( xKnownDeviceList[ uxListIdx ].pucPeerAddr, xAdvReport.peer_addr.addr, BLE_GAP_ADDR_LEN );
-			xKnownDeviceList[ uxListIdx ].xRxTimeStamp 	= xTaskGetTickCount();
-			xKnownDeviceList[ uxListIdx ].ucAddrType    = xAdvReport.peer_addr.addr_type;
-			xKnownDeviceList[ uxListIdx ].usDataLen 	= xAdvReport.data.len;
-			xKnownDeviceList[ uxListIdx ].ucPrimaryPhy	= xAdvReport.primary_phy;
+			xKnownDeviceList[ uxListIdx ].xRxTimeStamp 			= xTaskGetTickCount();
+			xKnownDeviceList[ uxListIdx ].xBcnFormat    		= xBcnFormat;
+			xKnownDeviceList[ uxListIdx ].ucUuidFilterMatchIdx  = ucUuidFilterMatchIdx;
+			xKnownDeviceList[ uxListIdx ].usDataLen 			= xAdvReport.data.len;
+			xKnownDeviceList[ uxListIdx ].ucPrimaryPhy			= xAdvReport.primary_phy;
 			/* Copy the advertiser data. */
-			memcpy( xKnownDeviceList[ uxListIdx ].pucData, xAdvReport.data.p_data, xAdvReport.data.len );
+			memcpy( xKnownDeviceList[ uxListIdx ].pucAdvData, xAdvReport.data.p_data, xAdvReport.data.len );
 		
 			/* Wipe RSSI list and add RSSI. */
 			for ( uxListIdx2 = 1; uxListIdx2 < RSSI_LIST_LEN; uxListIdx2++ )
@@ -375,14 +397,7 @@ void vStoreAdvertiser( ble_gap_evt_adv_report_t xAdvReport )
 		}
 		else
 		{
-			/* Not in list and list is full. Nothing we can do here but to report it immediately. */
-			/* TODO: add mutex as also called by AD handler. */
-			vSendAdvertiserData( xAdvReport.peer_addr.addr_type, 
-								 xAdvReport.peer_addr.addr, 
-								 xAdvReport.data.len, 
-								 xAdvReport.data.p_data, 
-								 xAdvReport.primary_phy, 
-								 xAdvReport.rssi );
+			/* Not in list and list is full. Nothing we can do here but to trash the data. */
 		}
 	}
 	
@@ -391,47 +406,180 @@ void vStoreAdvertiser( ble_gap_evt_adv_report_t xAdvReport )
 }
 /*-----------------------------------------------------------*/
 
+/* Check if the UUID filter is enabled and fill in the bBleUuidFilterEnable variable. */
+void bCheckAndSetUUIDFilterEnabled( void )
+{
+	unsigned char				ucFilterIdx;
+
+	bBleUuidFilterEnable = false;
+
+	for ( ucFilterIdx = 0; ( ucFilterIdx < BLE_NUM_UUID_FILTER ) && !bBleUuidFilterEnable; ucFilterIdx++ )
+	{
+		/* Check if there is at least one filter which is not all 0's. */
+		if ( !( bMemVCmp( xNvdsConfig.ucBleBeaconUuidFilter[ ucFilterIdx ], 0, BLE_LEN_UUID_FILTER ) ) )
+		{
+			bBleUuidFilterEnable = true;
+			return;
+		}
+	}
+}
+/*-----------------------------------------------------------*/
+
+/* Check if the beacon's UUID is in the list of configured UUID filters. */
+static bool bFilterUUID( unsigned char *pucBeaconUuid, unsigned char *pucUuidFilterMatchIdx )
+{
+	unsigned char				ucFilterIdx;
+
+	if ( bBleUuidFilterEnable )
+	{
+		for ( ucFilterIdx = 0; ucFilterIdx < BLE_NUM_UUID_FILTER; ucFilterIdx++ )
+		{
+			/* Only check against the configured UUID if the configured UUID is not all 0. */
+			if ( !( bMemVCmp( xNvdsConfig.ucBleBeaconUuidFilter[ ucFilterIdx ], 0, BLE_LEN_UUID_FILTER ) ) )
+			{
+				/* The filter has been configured. Check if it is all 0xFF, meaning a pass-through. */
+				if ( bMemVCmp( xNvdsConfig.ucBleBeaconUuidFilter[ ucFilterIdx ], 0xff, BLE_LEN_UUID_FILTER ) )
+				{
+					/* The filter is a pass-though, so return 'true' immediately. */
+					*pucUuidFilterMatchIdx = ucFilterIdx;
+					return true;
+				}
+
+				/* The filter is configure with a specific value. Check the received UUID against it. */
+				if ( memcmp( pucBeaconUuid,  xNvdsConfig.ucBleBeaconUuidFilter[ ucFilterIdx ], BLE_LEN_UUID_FILTER ) == 0 )
+				{
+					*pucUuidFilterMatchIdx = ucFilterIdx;
+					return true;
+				}
+			}
+		}
+	}
+
+	*pucUuidFilterMatchIdx = 0;
+	return false;
+}
+/*-----------------------------------------------------------*/
+
 /* Function for handling BLE Stack events.
    Parameters:	pxBleEvt  Bluetooth stack event.
+
+   BLE advertising reports are filtered for supported beacons.
+
+   Advertising data format for localiser beacons:
+		iBeacons:         	  02 01 06 1A FF 4C00 0215 80A9059AAD4C488BA267 DD7F2A389675 0000 0000 C3
+		Swissphone Beacons:   02 01 06 1B FF 4C00 0215 05A106683FC743B0B6830B1E6A06F73D  02AC 1F52 B9 64
+		Radius beacons:   	  02 01 06 1B FF 1801 BEAC 80A9059AAD4C488BA267 CAF3E52DEEAB 0002 0000 C3 26
+			                  |        |     |    |    |                    |            |    |    |  |
+			                  |        |     |    |    |                    |            |    |    |  30: MFG reserved (battery, 0x26 = 38%)
+			                  |        |     |    |    |                    |            |    |    29: reference RSSI (0xC5 = -59dBm)
+			                  |        |     |    |    |                    |            |    27: Minor
+			                  |        |     |    |    |                    |            25: Major (BcnUse, 0x0002 = BCNUSE_NO_ABNORMAL)
+							  |	  	   |     |	  |    |				    19: copied version of beacon advertiser address
+			                  |        |     |    |    9: beacon ID                                        
+			                  |        |     |    7: altBeacon code (0xBEAC)                                   
+			                  |        |     5: MfgID (Radius Networks = 0x1801, Apple = 0x4C00)
+			                  |        3: AD field length and identifier for manufacturer specific data (here: 1B = altBeacon, 1A = iBeacon)
+							  0: advertiser payload flags
+		
+	Advertising data format for TL beacons:
+	                          02 01 06 12 FF 1700 01 01 96A975 0358578080077244 DBFB0300...
+			                  |        |     |    |  |  |      ||               | 
+			                  |        |     |    |  |  |      ||               20: DFMAP
+			                  |        |     |    |  |  |      |foreign tracker ID (IMEI) 
+			                  |        |     |    |  |  |      12: padding                                        
+			                  |        |     |    |  |  9: TRAXxs manufacturer code (0x75A996)                                   
+			                  |        |     |    |  8: descriptor bitfield: bit 0 = evacuation, bit 1 = alert, bit 2 = SOS                           
+			                  |        |     |    7: meshing indicator (0x01)
+			                  |        |     5: MfgID (Newlogic = 0x0017)                                   
+			                  |        3: AD field length and identifier for manufacturer specific data (here: distress beacon)
+							  0: advertiser payload flags
 */
 static void vBleEvtHandler( ble_evt_t const *pxBleEvt, void *pvContext )
 {
 	ret_code_t					xErrCode;
 	ble_gap_evt_t const			*pxGapEvt = &pxBleEvt->evt.gap_evt;
 	ble_gap_evt_adv_report_t	xAdvReport = pxGapEvt->params.adv_report;
-	const char					uTLSignature[]  = { 0xFF, 0x17, 0x00 };
-	const char					cRadiusSignature[]  = { 0x1B, 0xFF, 0x18, 0x01 };   
-	const char					cIBeaconSignature[] = { 0x1A, 0xFF, 0x4C, 0x00, 0x02, 0x15, 0x80, 0xA9, 0x05, 0x9A, 0xAD, 0x4C, 0x48, 0x8B, 0xA2, 0x67 };                                                         
-	bool						bAdvReportUblox; 		
+	const char					uTLSignature[]               =       { 0xFF, 0x17, 0x00 };
+	const char					cRadiusSignature[]           = { 0x1B, 0xFF, 0x18, 0x01, 0xBE, 0xAC, 0x80, 0xA9, 0x05, 0x9A, 0xAD, 0x4C, 0x48, 0x8B, 0xA2, 0x67 };
+	const char					cIBeaconSignature[]          = { 0x1A, 0xFF, 0x4C, 0x00, 0x02, 0x15, 0x80, 0xA9, 0x05, 0x9A, 0xAD, 0x4C, 0x48, 0x8B, 0xA2, 0x67 };
+	const char					cSwissPhoneBeaconSignature[] =       { 0xFF, 0x4C, 0x00, 0x02, 0x15 };
+	enum xBLE_BCN_FORMAT 		xBcnFormat;
+	bool						bAdvReportTL; 		
 	bool						bAdvReportRadius;		
 	bool						bAdvReportIBeacon;		
+	bool						bAdvReportSwissPhoneBeacon;		
+	unsigned char 				ucUuidFilterMatchIdx;
 
     switch ( pxBleEvt->header.evt_id )
     {
         case BLE_GAP_EVT_ADV_REPORT:
-		
-			/* Check if the adv report is sent from one of the recognised devices. */
-			bAdvReportUblox   = ( memcmp(      uTLSignature, xAdvReport.data.p_data + 4, sizeof( uTLSignature ) ) == 0 );
-			bAdvReportRadius  = ( memcmp(  cRadiusSignature, xAdvReport.data.p_data + 3, sizeof( cRadiusSignature ) ) == 0 );
-			bAdvReportIBeacon = ( memcmp( cIBeaconSignature, xAdvReport.data.p_data + 3, sizeof( cIBeaconSignature ) ) == 0 );
 
-			if ( ( bAdvReportUblox   == true ) ||
-				 ( bAdvReportRadius  == true ) ||
-				 ( bAdvReportIBeacon == true ) )
+			/* Initialise the beacon report match results. Distress beacons, AltBecons and TRAXxs-issued iBeacons are always supported. */
+			ucUuidFilterMatchIdx	   = 0;
+		
+			/* Check if the adv report is sent from one of the recognised devices. 
+			   The filtering is in the order of increased filtering complexity. */
+			if (    ( memcmp( uTLSignature, xAdvReport.data.p_data + 4, sizeof( uTLSignature ) ) == 0 )
+			     && ( xAdvReport.data.len >= 24 ) )
+			{
+				xBcnFormat = BLE_DISTRESS_BEACON;
+			}
+			else
+			{
+				if (    ( memcmp( cRadiusSignature, xAdvReport.data.p_data + 3, sizeof( cRadiusSignature ) ) == 0 )
+ 			         && ( xAdvReport.data.len == 31 ) )
+				{
+					xBcnFormat = BLE_ALTBEACON;
+				}
+				else
+				{
+					if (    ( memcmp( cIBeaconSignature, xAdvReport.data.p_data + 3, sizeof( cIBeaconSignature ) ) == 0 )
+ 			             && ( xAdvReport.data.len == 30 ) )
+					{
+						xBcnFormat = BLE_IBEACON;
+					}
+					else
+					{
+						if (    ( memcmp( cSwissPhoneBeaconSignature, xAdvReport.data.p_data + 4, sizeof( cSwissPhoneBeaconSignature ) ) == 0 )
+ 			             	 && ( ( xAdvReport.data.len == 30 ) || ( xAdvReport.data.len == 31 ) ) )
+						{
+							if ( bFilterUUID( xAdvReport.data.p_data + 9, &ucUuidFilterMatchIdx ) )
+							{
+								xBcnFormat = BLE_SWISSPHONE_BEACON;
+
+							}
+							else
+							{
+								xBcnFormat = BLE_BEACON_NONE;
+							}
+						}						
+					}
+				}
+			}
+
+			if ( xBcnFormat != BLE_BEACON_NONE )
 			{   
 				/* Store the device in the list of known devices. */
-				vStoreAdvertiser( xAdvReport );
+				vStoreAdvertiser( xAdvReport, xBcnFormat, ucUuidFilterMatchIdx );
 			}
 						
 			/* Continue scanning. */
 			xErrCode = sd_ble_gap_scan_start( NULL, &xScanBuffer );
-			APP_ERROR_CHECK_ATIF( "ERROR scan continue: 0x%x", xErrCode );
+			if ( xErrCode == NRF_ERROR_INVALID_STATE )
+			{
+				NRF_LOG_WARNING( "%i vBleEvtHandler: sd_ble_gap_scan_start returned NRF_ERROR_INVALID_STATE.", ulReadRTC() );
+			}
+			else
+			{
+				APP_ERROR_CHECK_ATIF( "ERROR scan continue: 0x%x", xErrCode );
+			}
 			
             break;
         
         default:
         
-			NRF_LOG_DEBUG( "Received an unimplemented BLE event." );
+			NRF_LOG_INFO( "%i Received an unimplemented BLE event.", ulReadRTC() );
+			NRF_LOG_FLUSH();
             /* No implementation needed. */
 			break;
     }
@@ -451,14 +599,16 @@ static void vBleStackInit( void )
 						.addr = { 0x00, 0x00, 0x00, 0x6E, 0xCA, 0xD4 }
 					};
 	uint8_t			cRngBytesAvailable;
+	signed char		cDevAddrStrg[ 18 ];
+	uint32_t		uiIdx;
 	
 	/* Initialise the output power to default values. */
 	cTxPower1Mbps = OUTPUT_PWR_6_dBm;
 	cTxPower125kbps = OUTPUT_PWR_6_dBm;
  	
 	/* Set advertisement interval to default. */
-	ul1MbpsAdvInterval = ADV_INTERVAL;
-	ul125kbpsAdvInterval = ADV_INTERVAL;
+	ul1MbpsAdvInterval = BLE_ADV_INTVL_STD;
+	ul125kbpsAdvInterval = BLE_ADV_INTVL_STD;
 
     xErrCode = nrf_sdh_enable_request();
     APP_ERROR_CHECK_ATIF( "ERROR enabling SDH: 0x%x", xErrCode );
@@ -479,12 +629,21 @@ static void vBleStackInit( void )
 	/* Set the device's advertiser address. To remain compatible with ublox devices containing connectivity software,
 	   we will set the upper 24bit to ublox manufacturer ID and take the lower 24bit from the the least significant 24-bit 
 	   of the (unique) device address. */	
-	xBleGapAddr.addr[0] = ( char )( ( NRF_FICR->DEVICEADDR[0] & 0x000000ff ) >>  0 );
-	xBleGapAddr.addr[1] = ( char )( ( NRF_FICR->DEVICEADDR[0] & 0x0000ff00 ) >>  8 );
-	xBleGapAddr.addr[2] = ( char )( ( NRF_FICR->DEVICEADDR[0] & 0x00ff0000 ) >> 16 );
+	xBleGapAddr.addr[ 0 ] = ( char )( ( NRF_FICR->DEVICEADDR[ 0 ] & 0x000000ff ) >>  0 );
+	xBleGapAddr.addr[ 1 ] = ( char )( ( NRF_FICR->DEVICEADDR[ 0 ] & 0x0000ff00 ) >>  8 );
+	xBleGapAddr.addr[ 2 ] = ( char )( ( NRF_FICR->DEVICEADDR[ 0 ] & 0x00ff0000 ) >> 16 );
 	
 	xErrCode = sd_ble_gap_addr_set( &xBleGapAddr );
     APP_ERROR_CHECK_ATIF( "ERROR while setting GAP advertiser address: 0x%x", xErrCode );
+	
+	for ( uiIdx = 0; uiIdx < 6; uiIdx++ )
+	{
+		vByteToHexStrg( cDevAddrStrg + 3 * uiIdx, xBleGapAddr.addr[ 5 - uiIdx ] );
+		cDevAddrStrg[ 3 * uiIdx + 2 ] = ':';
+	}
+	cDevAddrStrg[ 3 * 5 + 2 ] = 0;
+	NRF_LOG_INFO( "BLE device address: %s", cDevAddrStrg );
+	NRF_LOG_FLUSH();
 	
     /* Create a FreeRTOS task to retrieve SoftDevice events. The first parameter is an optional pointer to a function
   	   to be executed */
@@ -497,6 +656,12 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 {
 	ret_code_t	xErrCode;
 	int8_t		cTxPower;
+
+	#if defined ( NO_SOFTDEVICE )
+		( void )xErrCode;
+		( void )cTxPower;
+		return;
+	#endif
 	
 	/* Request access to BLE configuration. */
 	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
@@ -504,7 +669,8 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 	/* Configure the advertisement:
 	   Advertisement data is in xAdvData.
 	   Advertiser physical configuration is in xAdvParams. */
-	NRF_LOG_DEBUG( "Advertising mode set to %i.", xNewAdvState );	   
+	NRF_LOG_DEBUG( "%i Advertising mode set to %i.", ulReadRTC(), xNewAdvState );	   
+	NRF_LOG_FLUSH();
 	
 	/* Set the advertising PHY and TX power as required. */
 	if ( xNewAdvState == ADV_LR125KBPS )
@@ -555,9 +721,6 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 
 	if ( xNewAdvState != ADV_NONE )
 	{
-		/* Stop any ongoing advertising before starting another with different parameters. */
-		( void ) sd_ble_gap_adv_stop( xAdvHandle );
-	
 		/* Start the BLE advertising timer. On expiry, the timer switch between LR and sort range advertising. */
 		( void )xTimerStart( xBleAdvTimer, BLE_OS_TIMEOUT );	
 
@@ -572,6 +735,9 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 		/* Start the advertising. BLE_CONN_CFG_TAG_DEFAULT is ignored as this is non-connectable advertising. */
 		xErrCode = sd_ble_gap_adv_start( xAdvHandle, BLE_CONN_CFG_TAG_DEFAULT );
 		APP_ERROR_CHECK_ATIF( "ERROR while starting advertising: 0x%x", xErrCode );
+
+		NRF_LOG_DEBUG( "%i Advertising started.", ulReadRTC() );
+		NRF_LOG_FLUSH();
 	}
 	else
 	{
@@ -586,36 +752,50 @@ void vStartAdvertising( portBASE_TYPE xNewAdvState )
 /* Stop advertising. */
 void vStopAdvertising( void )
 {
-	/* Request access to BLE configuration. */
-	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
+	ret_code_t	xErrCode;
 
-	NRF_LOG_DEBUG( "Advertising stopped." );	   
+	#if defined ( NO_SOFTDEVICE )
+		return;
+	#endif
+	
+	NRF_LOG_DEBUG( "%i Advertising stopped.", ulReadRTC() );	   
+	NRF_LOG_FLUSH();
+
 	( void )xTimerStop( xBleAdvTimer, BLE_OS_TIMEOUT );		
-	( void )sd_ble_gap_adv_stop( xAdvHandle );
-  
-	xAdvState = ADV_NONE;
-		
-	/* Release access to BLE configuration. */
-	xSemaphoreGive( xMutexBleConfig );
-}
-/*-----------------------------------------------------------*/
 
-portBASE_TYPE xGetAdvState( void )
-{
-	return xAdvState;
+	if ( xAdvState != ADV_NONE )
+	{
+		/* Request access to BLE configuration. */
+		xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
+
+		xErrCode = sd_ble_gap_adv_stop( xAdvHandle );
+		APP_ERROR_CHECK_ATIF( "ERROR while stopping advertising: 0x%x", xErrCode );
+
+		/* Release access to BLE configuration. */
+		xSemaphoreGive( xMutexBleConfig );
+		
+		xAdvState = ADV_NONE;
+	}
 }
 /*-----------------------------------------------------------*/
 
 /* Start scanning with the given parameter. */
 void vStartScan( portBASE_TYPE xNewScanState )
 {
-	ret_code_t xErrCode;
-    unsigned portBASE_TYPE    uxListIdx;
+	ret_code_t				xErrCode;
+    unsigned portBASE_TYPE	uxListIdx;
 	
+	#if defined ( NO_SOFTDEVICE )
+		( void )xErrCode;
+	    ( void )uxListIdx;
+		return;
+	#endif
+
 	/* Request access to BLE configuration. */
 	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
 	
-	NRF_LOG_DEBUG( "Scanning mode set to %i.", xNewScanState );	   
+	NRF_LOG_DEBUG( "%i Scanning mode set to %i.", ulReadRTC(), xNewScanState );	   
+	NRF_LOG_FLUSH();
 	
 	xScanParam.scan_phys = 0;
 	
@@ -643,10 +823,16 @@ void vStartScan( portBASE_TYPE xNewScanState )
    
 	/* Start scanning. */
 	xErrCode = sd_ble_gap_scan_start( &xScanParam, &xScanBuffer );
-	APP_ERROR_CHECK_ATIF( "ERROR while starting scanning: 0x%x", xErrCode );
+	APP_ERROR_CHECK_ATIF( "ERROR while starting scan: 0x%x", xErrCode );
 		
 	/* Release access to BLE configuration. */
 	xSemaphoreGive( xMutexBleConfig );
+	
+	/* Remember the time stamp when the BLE scanning was started. */
+	if ( xScanState == SCAN_NONE )
+	{
+		xBleOnTimeStamp = xTaskGetTickCount();	
+	}
 	
 	xScanState = xNewScanState;
 	
@@ -663,32 +849,155 @@ void vStartScan( portBASE_TYPE xNewScanState )
 /* Stop scanning. */
 void vStopScan( void )
 {
+	ret_code_t				xErrCode;
+
+	#if defined ( NO_SOFTDEVICE )
+		return;
+	#endif
+
 	( void )xTimerStop( xBleFilterTimer, BLE_OS_TIMEOUT );
 
-	/* Request access to BLE configuration. */
-	xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
+	if ( xScanState != SCAN_NONE )
+	{
+		/* Request access to BLE configuration. */
+		xSemaphoreTake( xMutexBleConfig, BLE_OS_TIMEOUT );
 
-	/* Stop scanning. */
-	NRF_LOG_DEBUG( "Scanning stopped." );	   
-	( void )sd_ble_gap_scan_stop();
-		
-	/* Release access to BLE configuration. */
-	xSemaphoreGive( xMutexBleConfig );
-	
-	xScanState = SCAN_NONE;
+		/* Stop scanning. */
+		NRF_LOG_DEBUG( "%i Scanning stopped.", ulReadRTC() );	   
+		NRF_LOG_FLUSH();
+		xErrCode = sd_ble_gap_scan_stop();
+		APP_ERROR_CHECK_ATIF( "ERROR while stoping scan: 0x%x", xErrCode );
+
+		/* Accumulated the time duration during which the module was running. */
+		xBleOnDuration += xTaskGetTickCount() - xBleOnTimeStamp;
+
+		/* Release access to BLE configuration. */
+		xSemaphoreGive( xMutexBleConfig );
+
+		xScanState = SCAN_NONE;
+	}	
 }
 /*-----------------------------------------------------------*/
 
-portBASE_TYPE xGetScanState( void )
+/* Set RSSI filter algorithm configuration. */
+void vSetRssiCfg( unsigned portBASE_TYPE uxFilterMethod, unsigned portBASE_TYPE uxFilterWindow )
 {
-	return xScanState;
+	uxRssiFilterMethod = uxFilterMethod;
+	uxRssiFilterWindow = uxFilterWindow;
+}
+/*-----------------------------------------------------------*/
+
+/* Set TX power. */
+void vSetTxPower( enum xIF_TYPE xRfInterface, unsigned portBASE_TYPE uxTxPower )
+{
+	if ( xRfInterface == SR )
+	{
+		cTxPower1Mbps = uxTxPower;
+	}
+	else
+	{
+		if ( xRfInterface == LR )
+		{
+			cTxPower125kbps = uxTxPower;
+		}
+	}
+}
+/*-----------------------------------------------------------*/
+
+/* Set the advertising interval. */
+void vSetAdvInterval( enum xIF_TYPE xRfInterface, unsigned long ulAdvInterval )
+{
+	if ( xRfInterface == SR )
+	{
+		ul1MbpsAdvInterval = ulAdvInterval;
+	}
+	else
+	{
+		if ( xRfInterface == LR )
+		{
+			ul125kbpsAdvInterval = ulAdvInterval;
+		}
+	}
+}
+/*-----------------------------------------------------------*/
+
+/* Set the advertising payload: Initialise. 
+   Fill the first three bytes of the payload with the AD flag. */
+void vSetAdvPayloadInit( enum xIF_TYPE xRfInterface )
+{
+	if ( xRfInterface == SR )
+	{
+		cEncodedStd1MbpsAdvData[ 0 ] = 0x02;			/* AD length: 2 bytes. */
+		cEncodedStd1MbpsAdvData[ 1 ] = 0x01;			/* AD Type: 1 = advertiser flags. */
+		cEncodedStd1MbpsAdvData[ 2 ] = 0x04;			/* AD Flag value: not discoverable, BR/EDR not supported. */
+		xEncodedStd1MbpsAdvDataLen = 3;
+	}
+	else
+	{
+		if ( xRfInterface == LR )
+		{
+			cEncodedLR125kbpsAdvData[ 0 ] = 0x02;		/* AD length: 2 bytes. */
+			cEncodedLR125kbpsAdvData[ 1 ] = 0x01;		/* AD Type: 1 = advertiser flags. */
+			cEncodedLR125kbpsAdvData[ 2 ] = 0x04;		/* AD Flag value: not discoverable, BR/EDR not supported. */
+			xEncodedLR125kbpsAdvDataLen = 3;
+		}
+	}
+}
+/*-----------------------------------------------------------*/
+
+/* Set the advertising payload: Continue writing the payload. */
+void vSetAdvPayload( enum xIF_TYPE xRfInterface, unsigned char *pucAdvPayload, unsigned portBASE_TYPE uxAdvPayloadLen )
+{
+	if ( xRfInterface == SR )
+	{
+		memcpy( cEncodedStd1MbpsAdvData + xEncodedStd1MbpsAdvDataLen, pucAdvPayload, uxAdvPayloadLen );
+		xEncodedStd1MbpsAdvDataLen += uxAdvPayloadLen;
+	}
+	else
+	{
+		if ( xRfInterface == LR )
+		{
+			memcpy( cEncodedLR125kbpsAdvData + xEncodedLR125kbpsAdvDataLen, pucAdvPayload, uxAdvPayloadLen );
+			xEncodedLR125kbpsAdvDataLen += uxAdvPayloadLen;
+		}
+	}
+}
+/*------------------------------------------------
+
+/* Return the BLE cumulative on-duration. */
+TickType_t xGetBleOnDuration( void )
+{
+	if ( xScanState == SCAN_NONE )
+	{
+		return xBleOnDuration;
+	}
+	else
+	{
+		return ( xBleOnDuration + xTaskGetTickCount() - xBleOnTimeStamp );
+	}
+}
+/*-----------------------------------------------------------*/
+
+/* Return the BLE functional state. */
+void vResetBleOnDuration( TickType_t xResetTargetValue )
+{
+	if ( xScanState != SCAN_NONE )
+	{
+		xBleOnDuration = xResetTargetValue;
+		xBleOnTimeStamp = xTaskGetTickCount();
+	}
+	else
+	{
+		/* Else, just set it to 0. */
+		xBleOnDuration = 0;
+	}
 }
 /*-----------------------------------------------------------*/
 
 /* Timer callback for periodic BLE beacon scans. 
    CAUTION: This function is running in the timer task!
 */
-void prvBleAdvTimerCallback( TimerHandle_t xTimer )
+static void vBleAdvTimerCallback( TimerHandle_t xTimer )
 {
 	ret_code_t	xErrCode;
 	int8_t		cTxPower;
@@ -705,7 +1014,8 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 		if ( xAdvMode == ADV_STD1MBPS )
 		{
 			/* switch to LR. */
-			NRF_LOG_DEBUG( "Advertising switched to long range." );	   
+			NRF_LOG_DEBUG( "%i Advertising switched to long range.", ulReadRTC() );	   
+			NRF_LOG_FLUSH();
 			xAdvParams.primary_phy = BLE_GAP_PHY_CODED;
 			xAdvParams.secondary_phy = BLE_GAP_PHY_CODED;
 			xAdvParams.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
@@ -719,7 +1029,8 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 		else
 		{
 			/* Switch to standard. */
-			NRF_LOG_DEBUG( "Advertising switched to 1Mbps." );	   
+			NRF_LOG_DEBUG( "%i Advertising switched to 1Mbps.", ulReadRTC() );	   
+			NRF_LOG_FLUSH();
 			xAdvParams.primary_phy = BLE_GAP_PHY_1MBPS;
 			xAdvParams.secondary_phy = BLE_GAP_PHY_1MBPS;
 			xAdvData.adv_data.p_data = cEncodedStd1MbpsAdvData;
@@ -741,12 +1052,24 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 		}
 		
 		/* Stop any ongoing advertising before starting another with different parameters. */
-		( void ) sd_ble_gap_adv_stop( xAdvHandle );
+		xErrCode = sd_ble_gap_adv_stop( xAdvHandle );
+		APP_ERROR_CHECK_ATIF( "ERROR while stopping advertising: 0x%x", xErrCode );
 	
 		/* Configure advertsising. Catch error and return error as AT event. An error could mean that the 
-		   advertising data is bad. */
+		   advertising data is bad. An error here reboots the module.
+		   In case NRF_ERROR_INVALID_LENGTH, the new data is not accepted but the module not rebooted
+		   to avoid service disruption. The next time the data is updated, the error should have disappeared. */
 		xErrCode = sd_ble_gap_adv_set_configure( &xAdvHandle, &xAdvData, &xAdvParams );
-		APP_ERROR_CHECK_ATIF( "ERROR while configuring advertising: 0x%x", xErrCode );
+		if ( xErrCode != NRF_ERROR_INVALID_LENGTH )
+		{
+			APP_ERROR_CHECK_ATIF( "ERROR while configuring advertising: 0x%x", xErrCode );
+		}
+		else
+		{				
+			/* Trace the error. */
+			V_TRACE_PRINT_LONG( TRACE_BLE_ADVERTISING_ERROR, xAdvMode, TRACE_UART_AND_FILE );
+			V_TRACE_PRINT_LONG( TRACE_BLE_ADVERTISING_ERROR, xAdvData.adv_data.len, TRACE_UART_AND_FILE );
+		}
 		
 		/* Set the output power. */
 		xErrCode = sd_ble_gap_tx_power_set( BLE_GAP_TX_POWER_ROLE_ADV, xAdvHandle, cTxPower );
@@ -763,26 +1086,3 @@ void prvBleAdvTimerCallback( TimerHandle_t xTimer )
 	}	
 }
 /*-----------------------------------------------------------*/
-
-/* Timer callback for periodic temperature sensor polling. 
-   CAUTION: This function is running in the timer task!
-*/
-void prvTempTimerCallback( TimerHandle_t xTimer )
-{
-    // This function contains workaround for PAN_028 rev2.0A anomalies 28, 29,30 and 31.
-    int32_t				temp;
-	int32_t				temperature;
-	ret_code_t			xErrCode;
-	char				cResStrg[ 20 ];
-	
-	( void )xTimer;
-	
-	/* Read temperature sensor. */
-	sd_temp_get( &temp );
-	temperature = ( 10 * temp ) / 4.0;
-
-	sprintf( cResStrg, "\r\n+UTEMP:%.i.%i\r\n", ( int )( temperature / 10 ), temperature - ( 10 * ( int )( temperature / 10 ) ) );
-	xComSendStringRAM( COM0, cResStrg );
-}
-/*-----------------------------------------------------------*/
-		

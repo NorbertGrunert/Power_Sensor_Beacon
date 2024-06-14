@@ -30,10 +30,13 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
+#include "custom_board.h"
+
 #ifdef SOFTDEVICE_PRESENT
 #include "nrf_soc.h"
 #endif
 #include "app_util_platform.h"
+#include "tracker.h"
 
 /*-----------------------------------------------------------
  * Possible configurations for system timer
@@ -58,13 +61,13 @@
 #define configUSE_PREEMPTION 													  1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 								  1
 #define configUSE_TICKLESS_IDLE 												  1
-#define configUSE_TICKLESS_IDLE_SIMPLE_DEBUG                                      1 /* See into vPortSuppressTicksAndSleep source code for explanation */
+#define configUSE_TICKLESS_IDLE_SIMPLE_DEBUG                                      0 /* See into vPortSuppressTicksAndSleep source code for explanation */
 #define configCPU_CLOCK_HZ                                                        ( SystemCoreClock )
 #define configTICK_RATE_HZ                                                        1024
-#define configMAX_PRIORITIES                                                      ( 5 )
-#define configMINIMAL_STACK_SIZE                                                  ( 60 )
-#define configTOTAL_HEAP_SIZE                                                     ( 20000 )
-#define configMAX_TASK_NAME_LEN                                                   ( 5 )
+#define configMAX_PRIORITIES                                                      ( 7 )
+#define configMINIMAL_STACK_SIZE                                                  ( 140 )
+#define configTOTAL_HEAP_SIZE                                                     ( 22000 )
+#define configMAX_TASK_NAME_LEN                                                   ( 10 )
 #define configUSE_16_BIT_TICKS                                                    0
 #define configIDLE_SHOULD_YIELD                                                   1
 #define configUSE_MUTEXES                                                         1
@@ -76,6 +79,7 @@
 #define configUSE_TIME_SLICING                                                    0
 #define configUSE_NEWLIB_REENTRANT                                                0
 #define configENABLE_BACKWARD_COMPATIBILITY                                       1
+#define configUSE_APPLICATION_TASK_TAG 											  1
 
 /* Hook function related definitions. */
 #define configUSE_IDLE_HOOK                                                       0
@@ -93,10 +97,10 @@
 #define configMAX_CO_ROUTINE_PRIORITIES                                           ( 0 )
 
 /* Software timer definitions. */
-#define configUSE_TIMERS 1
-#define configTIMER_TASK_PRIORITY                                                 ( tskIDLE_PRIORITY + 4 )
+#define configUSE_TIMERS														  1
+#define configTIMER_TASK_PRIORITY                                                 ( tskIDLE_PRIORITY + 6 )
 #define configTIMER_QUEUE_LENGTH                                                  32
-#define configTIMER_TASK_STACK_DEPTH                                              ( 200 )
+#define configTIMER_TASK_STACK_DEPTH                                              ( 256 )
 
 /* Tickless Idle configuration. */
 #define configEXPECTED_IDLE_TIME_BEFORE_SLEEP                                     2
@@ -104,27 +108,42 @@
 /* Tickless idle/low power functionality. */
 
 
-/* Define to trap errors during development. */
-#if defined(DEBUG_NRF) || defined(DEBUG_NRF_USER)
-#define configASSERT( x )                                                         ASSERT(x)
+/* ASSERT handling during production. In RELEASE configuration, overwrite the ASSERT
+   definition in nrf_assert.h (which is empty). */
+#if !defined( DEBUG_NRF ) && !defined( DEBUG_NRF_USER )
+	#if defined( ASSERT )
+		#undef  ASSERT 
+	#endif
+
+	#define ASSERT(expr)                                                      \
+	if (expr)                                                                 \
+	{                                                                         \
+	}                                                                         \
+	else                                                                      \
+	{                                                                         \
+		app_error_fault_handler( SYSTEM_RESET_ID, 0, 0 );         			  \
+	}                                                                         
 #endif
+
+/* Define to trap errors. */
+#define configASSERT( x )                                                         ASSERT(x)
 
 /* FreeRTOS MPU specific definitions. */
 #define configINCLUDE_APPLICATION_DEFINED_PRIVILEGED_FUNCTIONS                    1
 
 /* Optional functions - most linkers will remove unused functions anyway. */
-#define INCLUDE_vTaskPrioritySet                                                  1
-#define INCLUDE_uxTaskPriorityGet                                                 1
-#define INCLUDE_vTaskDelete                                                       1
+#define INCLUDE_vTaskPrioritySet                                                  0
+#define INCLUDE_uxTaskPriorityGet                                                 0
+#define INCLUDE_vTaskDelete                                                       0
 #define INCLUDE_vTaskSuspend                                                      1
 #define INCLUDE_xResumeFromISR                                                    1
-#define INCLUDE_vTaskDelayUntil                                                   1
+#define INCLUDE_vTaskDelayUntil                                                   0
 #define INCLUDE_vTaskDelay                                                        1
 #define INCLUDE_xTaskGetSchedulerState                                            1
 #define INCLUDE_xTaskGetCurrentTaskHandle                                         1
 #define INCLUDE_uxTaskGetStackHighWaterMark                                       1
-#define INCLUDE_xTaskGetIdleTaskHandle                                            1
-#define INCLUDE_xTimerGetTimerDaemonTaskHandle                                    1
+#define INCLUDE_xTaskGetIdleTaskHandle                                            0
+#define INCLUDE_xTimerGetTimerDaemonTaskHandle                                    0
 #define INCLUDE_pcTaskGetTaskName                                                 1
 #define INCLUDE_eTaskGetState                                                     1
 #define INCLUDE_xEventGroupSetBitFromISR                                          1
@@ -151,15 +170,77 @@ See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
 /* Definitions that map the FreeRTOS port interrupt handlers to their CMSIS
 standard names - or at least those used in the unmodified vector table. */
 
-#define vPortSVCHandler                                                           SVC_Handler
-#define xPortPendSVHandler                                                        PendSV_Handler
+#define vPortSVCHandler                                 SVC_Handler
+#define xPortPendSVHandler                              PendSV_Handler
 
 /* Trace support. */
-#define traceCREATE_COUNTING_SEMAPHORE_FAILED()		configASSERT( false )
-#define traceQUEUE_CREATE_FAILED( ucQueueType )		configASSERT( false )
-#define traceTASK_CREATE_FAILED( pxNewTCB )			configASSERT( false )
-#define traceTIMER_CREATE_FAILED()					configASSERT( false )
+#define traceCREATE_COUNTING_SEMAPHORE_FAILED()			configASSERT( false )
+#define traceQUEUE_CREATE_FAILED( ucQueueType )			configASSERT( false )
+#define traceTASK_CREATE_FAILED( pxNewTCB )				configASSERT( false )
+#define traceTIMER_CREATE_FAILED()						configASSERT( false )
 
+#if defined ( DEBUG_GPIO ) && defined ( DEBUG_GPIO_TASKS )
+	#define traceTASK_SWITCHED_IN()						{																\
+															nrf_gpio_pin_clear( DEBUG4 );								\
+															nrf_gpio_pin_clear( DEBUG5 );								\
+															nrf_gpio_pin_clear( DEBUG6 );								\
+															nrf_gpio_pin_clear( DEBUG7 );								\
+															if ( ( int )pxCurrentTCB->pxTaskTag == 1 )					\
+															{															\
+																nrf_gpio_pin_set( DEBUG4 );								\
+															}															\
+															if ( ( int )pxCurrentTCB->pxTaskTag == 2 )					\
+															{															\
+																nrf_gpio_pin_set( DEBUG5 );								\
+															}															\
+															if ( ( int )pxCurrentTCB->pxTaskTag == 3 )					\
+															{															\
+																nrf_gpio_pin_set( DEBUG4 );								\
+																nrf_gpio_pin_set( DEBUG5 );								\
+															}															\
+															if ( ( int )pxCurrentTCB->pxTaskTag == 4 )					\
+															{															\
+																nrf_gpio_pin_set( DEBUG6 );								\
+															}															\
+															if ( ( int )pxCurrentTCB->pxTaskTag == 5 )					\
+															{															\
+																nrf_gpio_pin_set( DEBUG4 );								\
+																nrf_gpio_pin_set( DEBUG6 );								\
+															}															\
+															if ( ( int )pxCurrentTCB->pxTaskTag == 6 )					\
+															{															\
+																nrf_gpio_pin_set( DEBUG5 );								\
+																nrf_gpio_pin_set( DEBUG6 );								\
+															}															\
+															if ( ( int )pxCurrentTCB->pxTaskTag == 7 )					\
+															{															\
+																nrf_gpio_pin_set( DEBUG4 );								\
+																nrf_gpio_pin_set( DEBUG5 );								\
+																nrf_gpio_pin_set( DEBUG6 );								\
+															}															\
+															if ( ( int )pxCurrentTCB->pxTaskTag == 8 )					\
+															{															\
+																nrf_gpio_pin_set( DEBUG7 );								\
+															}															\
+														}
+
+	#define traceINTERRUPT_IN()							{																\
+															nrf_gpio_pin_set( DEBUG4 );									\
+															nrf_gpio_pin_set( DEBUG5 );									\
+															nrf_gpio_pin_set( DEBUG6 );									\
+															nrf_gpio_pin_set( DEBUG7 );									\
+														}
+
+	#define traceINTERRUPT_OUT()						{																\
+															nrf_gpio_pin_clear( DEBUG4 );								\
+															nrf_gpio_pin_clear( DEBUG5 );								\
+															nrf_gpio_pin_clear( DEBUG6 );								\
+															nrf_gpio_pin_clear( DEBUG7 );								\
+														}
+#else
+	#define traceINTERRUPT_IN()
+	#define traceINTERRUPT_OUT()
+#endif
 
 /*-----------------------------------------------------------
  * Settings that are generated automatically
@@ -168,10 +249,10 @@ standard names - or at least those used in the unmodified vector table. */
 #if (configTICK_SOURCE == FREERTOS_USE_SYSTICK)
     // do not define configSYSTICK_CLOCK_HZ for SysTick to be configured automatically
     // to CPU clock source
-    #define xPortSysTickHandler     SysTick_Handler
-#elif (configTICK_SOURCE == FREERTOS_USE_RTC)
-    #define configSYSTICK_CLOCK_HZ  ( 32768UL )
-    #define xPortSysTickHandler     RTC1_IRQHandler
+    #define xPortSysTickHandler     					SysTick_Handler
+#elif (configTICK_SOURCE == FREERTOS_USE_RTC)	
+    #define configSYSTICK_CLOCK_HZ  					( 32768UL )
+    #define xPortSysTickHandler     					RTC1_IRQHandler
 #else
     #error  Unsupported configTICK_SOURCE value
 #endif
@@ -185,7 +266,7 @@ standard names - or at least those used in the unmodified vector table. */
     /* Cortex-M specific definitions. */
     #ifdef __NVIC_PRIO_BITS
         /* __BVIC_PRIO_BITS will be specified when CMSIS is being used. */
-        #define configPRIO_BITS             __NVIC_PRIO_BITS
+        #define configPRIO_BITS             			__NVIC_PRIO_BITS
     #else
         #error "This port requires __NVIC_PRIO_BITS to be defined"
     #endif

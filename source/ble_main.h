@@ -5,10 +5,12 @@
  *
  */
  
-#ifndef BLE_H
-#define BLE_H
+#ifndef BLE_MAIN_H
+#define BLE_MAIN_H
 
 #include <stdbool.h>
+
+#include "tracker.h"
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "drv_uart.h"
@@ -25,15 +27,12 @@
         if ( LOCAL_ERR_CODE != NRF_SUCCESS )									\
         {																		\
 			sprintf( cErrorStrg, ERR_STRG, xErrCode );							\
-			xComSendStringRAM( COM0, cErrorStrg );								\
+			xComSendString( COM_TRC, cErrorStrg );								\
 			vTaskDelay( 3 * portTICKS_PER_SEC );								\
             APP_ERROR_HANDLER( LOCAL_ERR_CODE );								\
         }																		\
     } while (0)
 /*-----------------------------------------------------------*/
-
-/* Size of the GSM UART Rx ring buffer. */
-#define	bleUART_RX_BUFFER_SIZE			uartRX_BUFFER_SIZE
 
 /* Tag that refers to the BLE stack configuration. */
 #define APP_BLE_CONN_CFG_TAG            1 		
@@ -56,9 +55,6 @@
 #define SCAN_NONE						0
 #define SCAN_STD1MBPS					1
 #define SCAN_LR125KBPS					4
-
-/* Advertising interval (in units of 0.625 ms) */
-#define ADV_INTERVAL 					160
 
 /* Interval at which the advertising mode is toggled between long range and standard, if configured. */
 #define ADV_INTERLEAVING_TIME			10 * portTICKS_PER_100MSEC
@@ -83,19 +79,31 @@
 
 #define	BLE_OS_TIMEOUT					( 10 * configTICK_RATE_HZ )
 
+/* SR / LR definition. */
+enum xIF_TYPE
+{
+	SR,
+	LR
+};
+
+enum xBLE_BCN_FORMAT
+{
+	BLE_BEACON_NONE,
+	BLE_IBEACON,
+	BLE_ALTBEACON,
+	BLE_SWISSPHONE_BEACON,
+	BLE_DISTRESS_BEACON
+};
+
 /* Structure to store advertising reports for known devices. */
 struct KNOWN_DEVICE
 {
 	bool						bUsed;								/* The entry in the known device list is used. */
-	uint8_t						ucAddrType;							/* Type of the advertiser address:
-																			BLE_GAP_ADDR_TYPE_PUBLIC   						0x00
-																			BLE_GAP_ADDR_TYPE_RANDOM_STATIC   				0x01 
-																			BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE 	0x02
-																			BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_NON_RESOLVABLE 0x03
-																			BLE_GAP_ADDR_TYPE_ANONYMOUS 					0x7F		*/
+	enum xBLE_BCN_FORMAT		xBcnFormat;							/* Type of the beacon. */
+	unsigned char 				ucUuidFilterMatchIdx;				/* UUID match index (valid only for SwissPhone beacons). */
 	uint8_t						pucPeerAddr[ BLE_GAP_ADDR_LEN ];
 	uint16_t					usDataLen;
-	uint8_t						pucData[ 256 ];
+	uint8_t						pucAdvData[ 256 ];
 	unsigned char				ucPrimaryPhy;	
 	TickType_t					xRxTimeStamp;
 	int8_t						xRSSI[ RSSI_LIST_LEN ];
@@ -103,7 +111,10 @@ struct KNOWN_DEVICE
 /*-----------------------------------------------------------*/
 
 /* Public function prototypes. */
-extern void vBleInit( void );
+extern void vBleMainInit( void );
+
+/* Check if the UUID filter is enabled and fill in the bBleUuidFilterEnable variable. */
+extern void bCheckAndSetUUIDFilterEnabled( void );
 
 /* Start advertising. */
 extern void vStartAdvertising( portBASE_TYPE xNewAdvState );
@@ -114,14 +125,30 @@ extern void vStopAdvertising( void );
 /* Start scanning. */
 extern void vStartScan( portBASE_TYPE xNewScanState );
 
-/* Stop advertising. */
+/* Stop scanning. */
 extern void vStopScan( void );
 
-/* Return advertising state. */
-extern portBASE_TYPE xGetAdvState( void );
+/* Set RSSI filter algorithm configuration. */
+extern void vSetRssiCfg( unsigned portBASE_TYPE uxFilterMethod, unsigned portBASE_TYPE uxFilterWindow );
 
-/* Return scan state. */
-extern portBASE_TYPE xGetScanState( void );
+/* Set TX power. */
+extern void vSetTxPower( enum xIF_TYPE xRfInterface, unsigned portBASE_TYPE uxTxPower );
+
+/* Set the advertising interval. */
+extern void vSetAdvInterval( enum xIF_TYPE xRfInterface, unsigned long ulAdvInterval );
+
+/* Set the advertising payload: Initialise. 
+   Fill the first three bytes of the payload with the AD flag. */
+extern void vSetAdvPayloadInit( enum xIF_TYPE xRfInterface );
+
+/* Continue the advertising payload. */
+extern void vSetAdvPayload( enum xIF_TYPE xRfInterface, unsigned char *pucAdvPayload, unsigned portBASE_TYPE uxAdvPayloadLen );
+
+/* Return the BLE cumulative on-duration. */
+extern TickType_t xGetBleOnDuration( void );
+
+/* Return the BLE functional state. */
+extern void vResetBleOnDuration( TickType_t xResetTargetValue );
 /*-----------------------------------------------------------*/
 
 /* Global variables. */
@@ -140,13 +167,8 @@ extern portBASE_TYPE		xEncodedStd1MbpsAdvDataLen;
 extern signed char			cEncodedLR125kbpsAdvData[ 257 ];
 extern portBASE_TYPE		xEncodedLR125kbpsAdvDataLen;
 
-/* Configured output power in different modes. */
-extern uint8_t				cTxPower1Mbps;
-extern uint8_t				cTxPower125kbps;
-extern uint32_t				ul1MbpsAdvInterval;
-extern uint32_t				ul125kbpsAdvInterval;
-
 /* List of known devices. */
 extern struct KNOWN_DEVICE	xKnownDeviceList[ KNOWN_DEVICE_LIST_LEN ];
+
 
 #endif

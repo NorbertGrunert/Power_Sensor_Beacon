@@ -40,138 +40,172 @@
 #ifndef BOARD_CUSTOM_H
 #define BOARD_CUSTOM_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+/* TL5xx board definition. */
+#include "nrf_gpio.h"
+#include "nrf_saadc.h"
 
-#ifdef NINA_B1
-	// NINA-B1 board definition
-	#include "nrf_gpio.h"
+/* Tracker packet format ID */
+#define TL500_FRMT			"2"
 
-	// In this case PIN 16 is used as button SW1, if the green led
-	// should be used it is possible to defined that one instead.
-	#define LEDS_NUMBER 	3
-
-	#define LED_1 			8 						// Red
-	#define LED_2 			18 						// Blue
-	#define LED_3 			16 						// Green
-
-	#define LEDS_ACTIVE_STATE 0
-
-	#define LEDS_LIST { LED_1, LED_2 }
-
-	#define BSP_LED_0 		LED_1
-	#define BSP_LED_1 		LED_2
-	#define BSP_LED_2 		LED_3
-
-	#define LEDS_INV_MASK 	LEDS_MASK
-
-	#define BUTTONS_NUMBER 	2
-
-	//#define BUTTON_1 		16 						// SW1
-	#define BUTTON_2 		30 						// SW2
-	#define BUTTON_PULL 	NRF_GPIO_PIN_PULLUP
-
-	#define BUTTONS_ACTIVE_STATE 0
-
-	#define BUTTONS_LIST { BUTTON_2 }
-
-	#define BSP_BUTTON_0 	BUTTON_2
-
-	#define RX_PIN_NUMBER 	5
-	#define TX_PIN_NUMBER 	6
-	#define CTS_PIN_NUMBER 	7
-	#define RTS_PIN_NUMBER 	31
-	#define DTR_PIN_NUMBER 	28
-	#define DSR_PIN_NUMBER 	29
-	#define HWFC 			true
-
-	#define SPIS_MISO_PIN 	12 						// SPI MISO signal.
-	#define SPIS_CSN_PIN 	11 						// SPI CSN signal.
-	#define SPIS_MOSI_PIN 	13 						// SPI MOSI signal.
-	#define SPIS_SCK_PIN 	14 						// SPI SCK signal.
-	#define SPIM0_SCK_PIN 	14 						// SPI clock GPIO pin number.
-
-	#define SPIM0_MOSI_PIN 	13 						// SPI Master Out Slave In GPIO pin number.
-	#define SPIM0_MISO_PIN 	12 						// SPI Master In Slave Out GPIO pin number.
-	#define SPIM0_SS_PIN 	11 						// SPI Slave Select GPIO pin number.
-
-	// Low frequency clock source to be used by the SoftDevice
-	#define NRF_CLOCK_LFCLKSRC {.source = NRF_CLOCK_LF_SRC_XTAL, 					\
-								.rc_ctiv = 0, 										\
-								.rc_temp_ctiv = 0, 									\
-								.xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_20_PPM}
-								
+/* Hardware version */
+#if defined( TL500 )
+	#if  defined ( RELEASE )
+		#define HW_VERSION		"TL500-RELEASE"
+		#define LEN_HW_VERSION	( 13 )			/* Length of the HW version string. */
+	#elif  defined ( DEBUG )
+		#define HW_VERSION		"TL500-DEBUG"
+		#define LEN_HW_VERSION	( 11 )			/* Length of the HW version string. */
+	#endif
+#elif defined ( TL501 )
+	#if  defined ( RELEASE )
+		#define HW_VERSION		"TL501-RELEASE"
+		#define LEN_HW_VERSION	( 13 )			/* Length of the HW version string. */
+	#elif  defined ( DEBUG )
+		#define HW_VERSION		"TL501-DEBUG"
+		#define LEN_HW_VERSION	( 11 )			/* Length of the HW version string. */
+	#endif
+#elif defined ( TL502 )
+	#if  defined ( RELEASE )
+		#define HW_VERSION		"TL502-RELEASE"
+		#define LEN_HW_VERSION	( 13 )			/* Length of the HW version string. */
+	#elif  defined ( DEBUG )
+		#define HW_VERSION		"TL502-DEBUG"
+		#define LEN_HW_VERSION	( 11 )			/* Length of the HW version string. */
+	#endif
+#elif defined ( TL510 )
+	#if  defined ( RELEASE )
+		#define HW_VERSION		"TL510-RELEASE"
+		#define LEN_HW_VERSION	( 13 )			/* Length of the HW version string. */
+	#elif  defined ( DEBUG )
+		#define HW_VERSION		"TL510-DEBUG"
+		#define LEN_HW_VERSION	( 11 )			/* Length of the HW version string. */
+	#endif
+#elif defined ( TL512 )
+	#if  defined ( RELEASE )
+		#define HW_VERSION		"TL512-RELEASE"
+		#define LEN_HW_VERSION	( 13 )			/* Length of the HW version string. */
+	#elif  defined ( DEBUG )
+		#define HW_VERSION		"TL512-DEBUG"
+		#define LEN_HW_VERSION	( 11 )			/* Length of the HW version string. */
+	#endif
 #else
-	// NINA-B3 board definition
-	#include "nrf_gpio.h"
-	
-	// In this file PIN 25 is used as button SWITCH_1, if the GREEN led
-	// should be used it is possible to defined that one instead.
-	#define LEDS_NUMBER 	3
-	#define LED_1 			NRF_GPIO_PIN_MAP(0, 13)		// RED
-	#define LED_2 			NRF_GPIO_PIN_MAP(1, 00)		// BLUE
-	#define LED_3 			NRF_GPIO_PIN_MAP(0, 25)		// GREEN	
-	
-	#define LEDS_ACTIVE_STATE 0	
-	
-	#define LEDS_LIST 		{ LED_1, LED_2, LED_3 }
-	#define LEDS_INV_MASK 	LEDS_MASK	
-	
-	#define BSP_LED_0 		LED_1
-	#define BSP_LED_1 		LED_2
-	#define BSP_LED_2 		LED_3
-
-	// #define BUTTONS_NUMBER 	2
-	// #define BUTTON_1 		25 						// SWITCH_1
-	// #define BUTTON_2 		2 						// SWITCH_2
-	#define BUTTONS_NUMBER 	1
-	#define BUTTON_1 		2							// SWITCH_2
-	
-	#define BUTTON_PULL 	NRF_GPIO_PIN_PULLUP
-	
-	#define BUTTONS_ACTIVE_STATE 0
-	
-	// #define BUTTONS_LIST 	{ BUTTON_1, BUTTON_2 }
-	#define BUTTONS_LIST 	{ BUTTON_1 }
-	
-	#define BSP_BUTTON_0 	BUTTON_1
-	// #define BSP_BUTTON_1 	BUTTON_2
-	
-	#define RX_PIN_NUMBER 	NRF_GPIO_PIN_MAP(0, 29)
-	#define TX_PIN_NUMBER 	NRF_GPIO_PIN_MAP(1, 13)
-	#define CTS_PIN_NUMBER 	NRF_GPIO_PIN_MAP(1, 12)
-	#define RTS_PIN_NUMBER 	NRF_GPIO_PIN_MAP(0, 31)
-	#define HWFC 			true
-	
-	#define BSP_QSPI_SCK_PIN 19
-	#define BSP_QSPI_CSN_PIN 17
-	#define BSP_QSPI_IO0_PIN 20
-	#define BSP_QSPI_IO1_PIN 21
-	#define BSP_QSPI_IO2_PIN 22
-	#define BSP_QSPI_IO3_PIN 23
-	
-	// Arduino board mappings
-	#define ARDUINO_SCL_PIN 24							// SCL signal pin
-	#define ARDUINO_SDA_PIN 16							// SDA signal pin
-	#define ARDUINO_13_PIN 	NRF_GPIO_PIN_MAP(0, 7)
-	#define ARDUINO_12_PIN 	NRF_GPIO_PIN_MAP(0, 2)
-	#define ARDUINO_11_PIN 	NRF_GPIO_PIN_MAP(0, 15)
-	#define ARDUINO_10_PIN 	NRF_GPIO_PIN_MAP(0, 14)
-	#define ARDUINO_9_PIN 	NRF_GPIO_PIN_MAP(0, 12)
-	#define ARDUINO_8_PIN 	NRF_GPIO_PIN_MAP(1, 9)
-	#define ARDUINO_7_PIN 	NRF_GPIO_PIN_MAP(0, 10)
-	#define ARDUINO_6_PIN 	NRF_GPIO_PIN_MAP(0, 9)
-	#define ARDUINO_5_PIN 	NRF_GPIO_PIN_MAP(0, 11)
-	#define ARDUINO_4_PIN 	NRF_GPIO_PIN_MAP(0, 13)
-	#define ARDUINO_3_PIN 	NRF_GPIO_PIN_MAP(0, 31)
-	#define ARDUINO_2_PIN 	NRF_GPIO_PIN_MAP(1, 12)
-	#define ARDUINO_1_PIN 	NRF_GPIO_PIN_MAP(1, 13)	
-#endif
-								
-#ifdef __cplusplus
-}
-
+	#error ERROR: Target not defined in makefile!
 #endif
 
-#endif // NINA_B1_H
+
+/* Signals used for voltage supervision. */
+#define VCHRG_SENSE			NRF_GPIO_PIN_MAP( 0,  3 )			/* Analog In  - Voltage measurement on wireless charger input. */
+#define VGSM_SENSE			NRF_GPIO_PIN_MAP( 0, 29 )			/* Analog In  - Voltage measurement on cellular supply. */
+
+/* Signals used for the charger control. */	
+#define NTC					NRF_GPIO_PIN_MAP( 0,  5 )			/* Analog In  - Battery NTC temperature measurement. */
+#define BATT_CHRG			NRF_GPIO_PIN_MAP( 0, 24 )			/* PWM Out    - Battery charge current control. */
+#define CHRG_STATE			NRF_GPIO_PIN_MAP( 0, 30 )			/* Analog In  - Read-back from battery charger CHRG output. ATTENTION: shared with buttons/LEDs on DK. */
+#define QIEN_N				NRF_GPIO_PIN_MAP( 1,  3 )			/* Out 		  - Qi charger enable. */
+												    
+/* Signals used for the control of the Cellular module. */
+#define GSM_PWR_CTRL		NRF_GPIO_PIN_MAP( 0, 18 )			/* Out 		  - Cellular module power supply control. */
+#define STATUS				NRF_GPIO_PIN_MAP( 0, 19 )			/* In		  - Cellular status signal. ATTENTION: shared with QSPI on DK. */
+#define GSM_PWR_KEY			NRF_GPIO_PIN_MAP( 0, 20 )			/* Out 		  - Open-drain output power ON cellular module. ATTENTION: shared with QSPI on DK. */
+#define GSM_RXD				NRF_GPIO_PIN_MAP( 1,  8 )			/* In 		  - Input UART - cellular. */
+#define GSM_TXD				NRF_GPIO_PIN_MAP( 1,  9 )			/* Out 		  - Output UART - cellular. */
+#if defined ( TL500 ) || defined ( TL501 ) || defined ( TL502 )
+	#define GSM_PONTRIG		NRF_GPIO_PIN_MAP( 0, 21 )			/* Out		  - Wake up the cellular module from PSM. ATTENTION: shared with QSPI on DK. */
+	#define GSM_CTS			NRF_GPIO_PIN_MAP( 0, 14 )			/* Out 		  - UART - CTS. ATTENTION: shared with buttons/LEDs on DK. */
+	#define GSM_RTS			NRF_GPIO_PIN_MAP( 0, 13 )			/* Out 		  - UART - RTS. ATTENTION: shared with buttons/LEDs on DK. */
+#endif
+#define GSM_DTR				NRF_GPIO_PIN_MAP( 0, 12 )			/* Out		  - Output UART - GSM_DTR (sleep control). ATTENTION: shared with buttons/LEDs on DK. */
+#define HWFC 				false                   
+												    
+/* Signals used for the accelerometer. */	        
+#define ACC_INT1			NRF_GPIO_PIN_MAP( 1, 15 )			/* In  		  - Input Accelerometer interrupt 1. */
+#if defined ( TL500 ) || defined ( TL501 ) || defined ( TL502 )
+	#define ACC_INT2		NRF_GPIO_PIN_MAP( 1, 13 )			/* In  		  - Input Accelerometer interrupt 2. */
+#endif
+#define SPI_CS				NRF_GPIO_PIN_MAP( 0, 26 )			/* Out 		  - Output SPI CS. */
+#define SPI_SCK				NRF_GPIO_PIN_MAP( 0,  7 )			/* Out 		  - Output SPI SCK. */
+#define SPI_MOSI			NRF_GPIO_PIN_MAP( 0, 27 )			/* Out 		  - Output SPI MOSI. */
+#define SPI_MISO			NRF_GPIO_PIN_MAP( 0,  6 )			/* In  		  - Input SPI MISO. */
+												    
+/* Signals used for LED control. */	                
+/* LEDs */                                          
+#define LED_RED         	NRF_GPIO_PIN_MAP( 0, 10 )			/* Out 		  - Output LED red. ATTENTION: shared with NFC2. */	
+#define LED_GREEN       	NRF_GPIO_PIN_MAP( 1, 10 )			/* Out 		  - Output LED green. */
+#define LED_BLUE        	NRF_GPIO_PIN_MAP( 1, 11 )			/* Out 		  - Output LED blue. */
+												    
+/* Signals used for the Trace UART. */	            
+#define TRC_RXD				NRF_GPIO_PIN_MAP( 0, 22 )			/* In		  - Input UART - trace. ATTENTION: shared with QSPI on DK. */
+#define TRC_TXD				NRF_GPIO_PIN_MAP( 0, 15 )			/* Out		  - Output UART - trace. ATTENTION: shared with buttons/LEDs on DK. */
+												    
+/* Signals used for the vibration motor. */	        
+#define VIBR				NRF_GPIO_PIN_MAP( 1,  5 )			/* Out		  - Output Vibrator. ATTENTION: shared with QSPI on DK. */
+	
+/* ZOE GPS interface. */                            
+#define GPS_SCL_PIN 		NRF_GPIO_PIN_MAP( 0,  8 )			/* Out		  - SCL signal pin. */
+#define GPS_SDA_PIN 		NRF_GPIO_PIN_MAP( 0, 11 )			/* InOut	  - SDA signal pin. ATTENTION: shared with buttons/LEDs on DK. */
+#define GPS_CTRL_PWR		NRF_GPIO_PIN_MAP( 0, 17 )			/* Out		  - DC/DC power control. ATTENTION: shared with QSPI on DK. */	
+#if defined ( TL500 ) || defined ( TL501 ) || defined ( TL502 )
+	#define GPS_RXD			NRF_GPIO_PIN_MAP( 0,  4 )			/* Out		  - UART RxD. */	
+	#define GPS_EXTINT		NRF_GPIO_PIN_MAP( 0, 31 )			/* Out		  - GPS external interrupt. */	
+	#define GPS_TX_RDY		NRF_GPIO_PIN_MAP( 1, 14 )			/* In		  - GPS Tx ready. */	
+#endif
+
+/* Debug */
+#define DEBUG0	         	NRF_GPIO_PIN_MAP( 0, 23 )			/* Out 		  - Debug. TL500 net: D_IO_Gen1, T63, debug board: (J33-10, BleBlue) */
+#define DEBUG1	         	NRF_GPIO_PIN_MAP( 0, 25 )			/* Out 		  - Debug. TL500 net: D_IO_Gen2, T16, debug board: (J35-13) */
+#define DEBUG2	         	NRF_GPIO_PIN_MAP( 0, 16 )			/* Out 		  - Debug. TL500 net: D_IO_Gen3, T9,  debug board: (J35-10, VBatSense) */
+#define DEBUG3	         	NRF_GPIO_PIN_MAP( 1, 00 )			/* Out 		  - Debug. TL500 net: SWO_DBG, JT1-4, debug board: PDI_DAT */
+#define DEBUG4	         	NRF_GPIO_PIN_MAP( 1, 01 )			/* Out 		  - Debug. TL500 net: D_IO_LF, JT1-3, debug board: PDI_CLKRST */
+#define DEBUG5	         	NRF_GPIO_PIN_MAP( 1, 12 )			/* Out 		  - Debug. TL500 net: D_IO_LF1, solder island */
+#define DEBUG6	         	NRF_GPIO_PIN_MAP( 0, 28 )			/* Out 		  - Debug. TL500 net: A_IN_LF1, solder island */
+#define DEBUG7	         	NRF_GPIO_PIN_MAP( 0, 02 )			/* Out 		  - Debug. TL500 net: A_IN_LF2, solder island */
+
+/* ADC channel and pin allocations. The pin numbering for the ADC does not follow the GPIO numbering scheme. 
+   Analog positive and negative input channels have strange numbering:				
+			NRF_SAADC_INPUT_DISABLED          	not connected                        
+			NRF_SAADC_INPUT_AIN0  		 		AIN0			P0.02		A12         
+			NRF_SAADC_INPUT_AIN1  		 		AIN1			P0.03		B13         
+			NRF_SAADC_INPUT_AIN2  		 		AIN2			P0.04		J1          
+			NRF_SAADC_INPUT_AIN3  		 		AIN3			P0.05		K2          
+			NRF_SAADC_INPUT_AIN4  		 		AIN4			P0.28		B11         
+			NRF_SAADC_INPUT_AIN5  		 		AIN5			P0.29		A10		    
+			NRF_SAADC_INPUT_AIN6  		 		AIN6			P0.30		B9          
+			NRF_SAADC_INPUT_AIN7  		 		AIN7			P0.31		A8          
+			NRF_SAADC_INPUT_VDD          		VDD									
+			NRF_SAADC_INPUT_VDDHDIV5     		VDDH/5								*/
+#define VBAT_ADC_PIN			NRF_SAADC_INPUT_VDDHDIV5
+#define VCC_ADC_PIN				NRF_SAADC_INPUT_VDD
+#define VCHRG_ADC_PIN			NRF_SAADC_INPUT_AIN1
+#define VCHRG_STATE_ADC_PIN		NRF_SAADC_INPUT_AIN6
+#define VGSM_ADC_PIN			NRF_SAADC_INPUT_AIN5
+#define NTC_ADC_PIN				NRF_SAADC_INPUT_AIN3
+
+/* LPCOMP pin allocation. The pin numbering for the LPCOMP does not follow the GPIO numbering scheme. 
+			NRF_LPCOMP_INPUT_0  		 		AIN0			P0.02		A12         
+			NRF_LPCOMP_INPUT_1  		 		AIN1			P0.03		B13         
+			NRF_LPCOMP_INPUT_2  		 		AIN2			P0.04		J1          
+			NRF_LPCOMP_INPUT_3  		 		AIN3			P0.05		K2          
+			NRF_LPCOMP_INPUT_4  		 		AIN4			P0.28		B11         
+			NRF_LPCOMP_INPUT_5  		 		AIN5			P0.29		A10		    
+			NRF_LPCOMP_INPUT_6  		 		AIN6			P0.30		B9          
+			NRF_LPCOMP_INPUT_7  		 		AIN7			P0.31		A8      */
+#define VCHRG_LPCOMP_PIN		NRF_LPCOMP_INPUT_1
+
+/* Define the ADC channels. The ADC channel is used as index into the channel configuration table, thus be careful that the index defined
+   here matches that table. */
+enum xADC_CHANNEL
+{
+	NTC_ADC			= 0,		/*  Battery NTC. */
+	CHRG_STATE_ADC	= 1,		/*  Charge state pin for the LiIon charge controller. */
+	VGSM_ADC		= 2,		/*  GSM module supply voltage. */
+	VBAT_ADC		= 3,		/*  Battery voltage. */
+	VCHRG_ADC		= 4,		/*  Wireless charger voltage. */
+	VCC_ADC			= 5			/*  VCC */
+};	
+#define ADC_CHANNEL_LAST_IDX	5
+
+/* Define which physical UART is going to be used for the AT-interface to the cellular module and the trace interface. */
+#define COM_GSM					COM0   
+#define COM_TRC					COM1
+
+#endif

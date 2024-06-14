@@ -38,8 +38,11 @@
  *
  */
 
+
 #include "nrf_sdh_freertos.h"
 #include "nrf_sdh.h"
+
+#include "tracker.h"
 
 /* Group of FreeRTOS-related includes. */
 #include "FreeRTOS.h"
@@ -47,9 +50,10 @@
 #include "queue.h"
 #include "semphr.h"
 
-#define NRF_LOG_MODULE_NAME nrf_sdh_freertos
+#define NRF_LOG_MODULE_NAME SD
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
+#include "nrf_log_ctrl.h"
 
 #define NRF_BLE_FREERTOS_SDH_TASK_STACK		512
 
@@ -75,7 +79,9 @@ void SD_EVT_IRQHandler(void)
 /* This function gets events from the SoftDevice and processes them. */
 static void softdevice_task(void * pvParameter)
 {
-    NRF_LOG_DEBUG("Enter softdevice_task.");
+	vTaskSetApplicationTaskTag( NULL, ( void * ) SD_TASK_TAG );
+
+    NRF_LOG_DEBUG("Task started.");
 
     if (m_task_hook != NULL)
     {
@@ -85,7 +91,7 @@ static void softdevice_task(void * pvParameter)
     while (true)
     {
         nrf_sdh_evts_poll(); // Let the handlers run first, in case the EVENT occured before creating this task.
-//        vTaskSuspend(NULL);
+
         (void)ulTaskNotifyTake(pdTRUE,         /* Clear the notification value before exiting (equivalent to the binary semaphore). */
 							   portMAX_DELAY); /* Block indefinitely (INCLUDE_vTaskSuspend has to be enabled).*/
 	}
@@ -94,12 +100,10 @@ static void softdevice_task(void * pvParameter)
 
 void nrf_sdh_freertos_init(nrf_sdh_freertos_task_hook_t hook_fn, void * p_context, UBaseType_t uxPriority )
 {
-    NRF_LOG_DEBUG("Creating a SoftDevice task.");
-
     m_task_hook = hook_fn;
 
     BaseType_t xReturned = xTaskCreate(softdevice_task,
-                                       "BLE",
+                                       "SD",
                                        NRF_BLE_FREERTOS_SDH_TASK_STACK,
                                        p_context,
                                        uxPriority,
@@ -109,4 +113,7 @@ void nrf_sdh_freertos_init(nrf_sdh_freertos_task_hook_t hook_fn, void * p_contex
         NRF_LOG_ERROR("SoftDevice task not created.");
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
     }
+	
+	NRF_LOG_INFO( "Module initialised." );
+	NRF_LOG_FLUSH();
 }
