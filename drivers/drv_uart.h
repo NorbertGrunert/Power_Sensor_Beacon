@@ -8,8 +8,6 @@
 #ifndef DRV_UART_H
 #define DRV_UART_H
 
-#include "tracker.h"
-
 /* Scheduler include files. */
 #include "FreeRTOS.h"
 #include "queue.h"
@@ -22,7 +20,6 @@
 
 /* Standard include files. */
 #include <stdbool.h>
-#include "tracker.h"
 /*-----------------------------------------------------------*/
 
 /* Definitions. */
@@ -32,7 +29,9 @@
 #define OP_QUEUES_SIZE          3
 #define APP_TIMER_PRESCALER     NRF_SERIAL_APP_TIMER_PRESCALER
 
-#define NRF_UARTE_RX_TIMEOUT	(  500 )					/* Timeout (us) for the UARTE without receiving data before sending an RX IRQ. */
+#define uartRX_BUFFER_SIZE		512							/* Size in items. Must be a power of 2. */
+
+#define NRF_UARTE_RX_TIMEOUT	(  2 )						/* Timeout (APP timer ticks) for the UARTE without receiving data before sending an RX IRQ. */
 #define UART_TX_TIMEOUT			( 1 * portTICKS_PER_SEC )	/* Timeout (s) for the UARTE freeing any buffers for transmission. */
 
 #define UARTE0_SECRET_REG		0x40002FFC					/* UARTE0 secret register to power-cycle the UART. */

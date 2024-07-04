@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#include "tracker.h"
 
 /* nRF SDK files. */
 #define NRF_LOG_MODULE_NAME 		RTCLK
@@ -37,6 +36,9 @@ unsigned short usReadRTC( void );
 
 /* Read the RTC time stamp value as long. */
 unsigned long ulReadRTC( void );
+
+/* Read the raw RTC time stamp value as long. */
+unsigned long ulReadRawRTC( void );
 /*-----------------------------------------------------------*/
 
 /* Global variables. */
@@ -83,6 +85,22 @@ unsigned long ulReadRTC( void )
 	portEXIT_CRITICAL();
 	
 	return ( unsigned long )( ullRTC & 0xffffffff );
+}
+/*-----------------------------------------------------------*/
+
+/* Read the raw RTC time stamp value as 32-bit value. */
+unsigned long ulReadRawRTC( void )
+{
+	volatile unsigned long			ulRTC;
+	
+	/* Make a local copy of the RTC value. */
+
+	portENTER_CRITICAL();
+	/* Get the HW RTC count. */
+	ulRTC = ( unsigned long long )nrf_rtc_counter_get( portNRF_RTC_REG );
+	portEXIT_CRITICAL();
+	
+	return ( ulRTC );
 }
 /*-----------------------------------------------------------*/
 

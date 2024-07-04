@@ -30,13 +30,10 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
-#include "custom_board.h"
-
 #ifdef SOFTDEVICE_PRESENT
 #include "nrf_soc.h"
 #endif
 #include "app_util_platform.h"
-#include "tracker.h"
 
 /*-----------------------------------------------------------
  * Possible configurations for system timer
@@ -64,7 +61,7 @@
 #define configUSE_TICKLESS_IDLE_SIMPLE_DEBUG                                      0 /* See into vPortSuppressTicksAndSleep source code for explanation */
 #define configCPU_CLOCK_HZ                                                        ( SystemCoreClock )
 #define configTICK_RATE_HZ                                                        1024
-#define configMAX_PRIORITIES                                                      ( 7 )
+#define configMAX_PRIORITIES                                                      ( 5 )
 #define configMINIMAL_STACK_SIZE                                                  ( 140 )
 #define configTOTAL_HEAP_SIZE                                                     ( 22000 )
 #define configMAX_TASK_NAME_LEN                                                   ( 10 )
@@ -97,8 +94,8 @@
 #define configMAX_CO_ROUTINE_PRIORITIES                                           ( 0 )
 
 /* Software timer definitions. */
-#define configUSE_TIMERS														  1
-#define configTIMER_TASK_PRIORITY                                                 ( tskIDLE_PRIORITY + 6 )
+#define configUSE_TIMERS 1
+#define configTIMER_TASK_PRIORITY                                                 ( tskIDLE_PRIORITY + 4 )
 #define configTIMER_QUEUE_LENGTH                                                  32
 #define configTIMER_TASK_STACK_DEPTH                                              ( 256 )
 
@@ -108,8 +105,7 @@
 /* Tickless idle/low power functionality. */
 
 
-/* ASSERT handling during production. In RELEASE configuration, overwrite the ASSERT
-   definition in nrf_assert.h (which is empty). */
+/* Define to trap errors during development. */
 #if !defined( DEBUG_NRF ) && !defined( DEBUG_NRF_USER )
 	#if defined( ASSERT )
 		#undef  ASSERT 
@@ -174,73 +170,11 @@ standard names - or at least those used in the unmodified vector table. */
 #define xPortPendSVHandler                              PendSV_Handler
 
 /* Trace support. */
-#define traceCREATE_COUNTING_SEMAPHORE_FAILED()			configASSERT( false )
-#define traceQUEUE_CREATE_FAILED( ucQueueType )			configASSERT( false )
-#define traceTASK_CREATE_FAILED( pxNewTCB )				configASSERT( false )
-#define traceTIMER_CREATE_FAILED()						configASSERT( false )
+#define traceCREATE_COUNTING_SEMAPHORE_FAILED()		    configASSERT( false )
+#define traceQUEUE_CREATE_FAILED( ucQueueType )		    configASSERT( false )
+#define traceTASK_CREATE_FAILED( pxNewTCB )			    configASSERT( false )
+#define traceTIMER_CREATE_FAILED()					    configASSERT( false )
 
-#if defined ( DEBUG_GPIO ) && defined ( DEBUG_GPIO_TASKS )
-	#define traceTASK_SWITCHED_IN()						{																\
-															nrf_gpio_pin_clear( DEBUG4 );								\
-															nrf_gpio_pin_clear( DEBUG5 );								\
-															nrf_gpio_pin_clear( DEBUG6 );								\
-															nrf_gpio_pin_clear( DEBUG7 );								\
-															if ( ( int )pxCurrentTCB->pxTaskTag == 1 )					\
-															{															\
-																nrf_gpio_pin_set( DEBUG4 );								\
-															}															\
-															if ( ( int )pxCurrentTCB->pxTaskTag == 2 )					\
-															{															\
-																nrf_gpio_pin_set( DEBUG5 );								\
-															}															\
-															if ( ( int )pxCurrentTCB->pxTaskTag == 3 )					\
-															{															\
-																nrf_gpio_pin_set( DEBUG4 );								\
-																nrf_gpio_pin_set( DEBUG5 );								\
-															}															\
-															if ( ( int )pxCurrentTCB->pxTaskTag == 4 )					\
-															{															\
-																nrf_gpio_pin_set( DEBUG6 );								\
-															}															\
-															if ( ( int )pxCurrentTCB->pxTaskTag == 5 )					\
-															{															\
-																nrf_gpio_pin_set( DEBUG4 );								\
-																nrf_gpio_pin_set( DEBUG6 );								\
-															}															\
-															if ( ( int )pxCurrentTCB->pxTaskTag == 6 )					\
-															{															\
-																nrf_gpio_pin_set( DEBUG5 );								\
-																nrf_gpio_pin_set( DEBUG6 );								\
-															}															\
-															if ( ( int )pxCurrentTCB->pxTaskTag == 7 )					\
-															{															\
-																nrf_gpio_pin_set( DEBUG4 );								\
-																nrf_gpio_pin_set( DEBUG5 );								\
-																nrf_gpio_pin_set( DEBUG6 );								\
-															}															\
-															if ( ( int )pxCurrentTCB->pxTaskTag == 8 )					\
-															{															\
-																nrf_gpio_pin_set( DEBUG7 );								\
-															}															\
-														}
-
-	#define traceINTERRUPT_IN()							{																\
-															nrf_gpio_pin_set( DEBUG4 );									\
-															nrf_gpio_pin_set( DEBUG5 );									\
-															nrf_gpio_pin_set( DEBUG6 );									\
-															nrf_gpio_pin_set( DEBUG7 );									\
-														}
-
-	#define traceINTERRUPT_OUT()						{																\
-															nrf_gpio_pin_clear( DEBUG4 );								\
-															nrf_gpio_pin_clear( DEBUG5 );								\
-															nrf_gpio_pin_clear( DEBUG6 );								\
-															nrf_gpio_pin_clear( DEBUG7 );								\
-														}
-#else
-	#define traceINTERRUPT_IN()
-	#define traceINTERRUPT_OUT()
-#endif
 
 /*-----------------------------------------------------------
  * Settings that are generated automatically
@@ -249,10 +183,10 @@ standard names - or at least those used in the unmodified vector table. */
 #if (configTICK_SOURCE == FREERTOS_USE_SYSTICK)
     // do not define configSYSTICK_CLOCK_HZ for SysTick to be configured automatically
     // to CPU clock source
-    #define xPortSysTickHandler     					SysTick_Handler
-#elif (configTICK_SOURCE == FREERTOS_USE_RTC)	
-    #define configSYSTICK_CLOCK_HZ  					( 32768UL )
-    #define xPortSysTickHandler     					RTC1_IRQHandler
+    #define xPortSysTickHandler     SysTick_Handler
+#elif (configTICK_SOURCE == FREERTOS_USE_RTC)
+    #define configSYSTICK_CLOCK_HZ  ( 32768UL )
+    #define xPortSysTickHandler     RTC1_IRQHandler
 #else
     #error  Unsupported configTICK_SOURCE value
 #endif
@@ -266,7 +200,7 @@ standard names - or at least those used in the unmodified vector table. */
     /* Cortex-M specific definitions. */
     #ifdef __NVIC_PRIO_BITS
         /* __BVIC_PRIO_BITS will be specified when CMSIS is being used. */
-        #define configPRIO_BITS             			__NVIC_PRIO_BITS
+        #define configPRIO_BITS             __NVIC_PRIO_BITS
     #else
         #error "This port requires __NVIC_PRIO_BITS to be defined"
     #endif

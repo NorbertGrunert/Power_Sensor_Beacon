@@ -1,0 +1,1 @@
+@"C:\Program Files\SEGGER\SEGGER Embedded Studio for ARM 5.42a\bin\emBuild.exe" -config Debug -verbose build\ses\Power_Sensor_Beacon.emProject

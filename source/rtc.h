@@ -21,6 +21,9 @@ extern unsigned short usReadRTC( void );
 
 /* Read the RTC time stamp value as 32-bit value. */
 extern unsigned long ulReadRTC( void );
+
+/* Read the raw RTC time stamp value as long. */
+extern unsigned long ulReadRawRTC( void );
 /*-----------------------------------------------------------*/
 
 #endif

@@ -34,7 +34,7 @@
   <MemorySegment name="RAM1" start="$(RAM_PH_START)" size="$(RAM_PH_SIZE)">
     <ProgramSection load="no" name=".reserved_ram" start="$(RAM_PH_START)" size="$(RAM_START)-$(RAM_PH_START)" />
     <ProgramSection alignment="0x100" load="No" name=".vectors_ram" start="$(RAM_START)" address_symbol="__app_ram_start__"/>
-	<ProgramSection alignment="4" keep="Yes" load="No" name=".non_init" address_symbol="__start_ram_persist" end_symbol="__stop_ram_persist" size_symbol="__ram_persist_size__" size="4096" />
+ 	  <ProgramSection alignment="4" keep="Yes" load="No" name=".non_init" address_symbol="__start_ram_persist" end_symbol="__stop_ram_persist" size_symbol="__ram_persist_size__" size="4096" />
     <ProgramSection alignment="4" keep="Yes" load="No" name=".nrf_sections_run" address_symbol="__start_nrf_sections_run" />
     <ProgramSection alignment="4" keep="Yes" load="No" name=".cli_sorted_cmd_ptrs_run" address_symbol="__start_cli_sorted_cmd_ptrs" end_symbol="__stop_cli_sorted_cmd_ptrs" />
     <ProgramSection alignment="4" keep="Yes" load="No" name=".log_dynamic_data_run" address_symbol="__start_log_dynamic_data" end_symbol="__stop_log_dynamic_data" />
@@ -46,6 +46,7 @@
     <ProgramSection alignment="4" load="No" name=".tdata_run" />
     <ProgramSection alignment="4" load="No" name=".bss" />
     <ProgramSection alignment="4" load="No" name=".tbss" />
+    <ProgramSection alignment="4" load="No" name=".non_init" />
     <ProgramSection alignment="4" size="__HEAPSIZE__" load="No" name=".heap" />
     <ProgramSection alignment="8" size="__STACKSIZE__" load="No" place_from_segment_end="Yes" name=".stack"  address_symbol="__StackLimit" end_symbol="__StackTop"/>
     <ProgramSection alignment="8" size="__STACKSIZE_PROCESS__" load="No" name=".stack_process" />

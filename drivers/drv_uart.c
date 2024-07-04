@@ -9,8 +9,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#include "tracker.h"
-
 /* nRF SDK files. */
 #define NRF_LOG_MODULE_NAME 				DRV_UART
 #include "nrf_log.h"
@@ -22,13 +20,12 @@ NRF_LOG_MODULE_REGISTER();
 #include "queue.h"
 #include "semphr.h"
 #include "task.h"
+#include "timers.h"
 
 /* Device specific include files. */
 #include "custom_board.h"
 #include "drv_uart.h"
-#include "drv_nvm.h"
-#include "config.h"
-#include "rtc.h"
+#include "main.h"
 /*-----------------------------------------------------------*/
 
 /* Function prototypes. */
@@ -62,7 +59,7 @@ struct COM_PORT		xCom[ NUM_COMS ];				/* Array of structures containing all vari
 		TIMER instance used for timeout:													NRF_LIBUARTE_PERIPHERAL_NOT_USED
 		Size of single RX buffer:															127
 		Number of buffers in the RX buffer pool:											3								 
-   As there is no HW ressopurce defined for timeout, an app timer is used. */
+   As there is no HW ressource defined for timeout, an app timer is used. */
 NRF_LIBUARTE_ASYNC_DEFINE( xLibUarteCOM0, 0, 1, NRF_LIBUARTE_PERIPHERAL_NOT_USED, NRF_LIBUARTE_PERIPHERAL_NOT_USED, 127, 3 );
 NRF_QUEUE_DEF( COM_BUFFER, xTxBufferQueueCOM0, 128, NRF_QUEUE_MODE_NO_OVERFLOW );
 
@@ -73,7 +70,7 @@ NRF_QUEUE_DEF( COM_BUFFER, xTxBufferQueueCOM0, 128, NRF_QUEUE_MODE_NO_OVERFLOW )
 		TIMER instance used for timeout:													NRF_LIBUARTE_PERIPHERAL_NOT_USED
 		Size of single RX buffer:															15
 		Number of buffers in the RX buffer pool:											3								 
-   As there is no HW ressopurce defined for timeout, an app timer is used. */
+   As there is no HW ressource defined for timeout, an app timer is used. */
 NRF_LIBUARTE_ASYNC_DEFINE( xLibUarteCOM1, 1, 2, NRF_LIBUARTE_PERIPHERAL_NOT_USED, NRF_LIBUARTE_PERIPHERAL_NOT_USED, 15, 3 );
 NRF_QUEUE_DEF( COM_BUFFER, xTxBufferQueueCOM1, 63, NRF_QUEUE_MODE_NO_OVERFLOW );
 /*-----------------------------------------------------------*/
@@ -160,10 +157,10 @@ void vCOMOpen( unsigned portBASE_TYPE xComID, signed char *pcUartRxBuffer, unsig
 	{
 		switch( xComID )
 		{
-			case COM0:		nrf_libuarte_async_config.tx_pin     = GSM_TXD;			/* COM port to cellular module. */	
-							nrf_libuarte_async_config.rx_pin     = GSM_RXD;
-							nrf_libuarte_async_config.baudrate   = NRF_UARTE_BAUDRATE_115200;
-							nrf_libuarte_async_config.parity     = NRF_UARTE_PARITY_EXCLUDED;
+			case COM0:		nrf_libuarte_async_config.tx_pin     = SENSOR_TXD;			/* COM port to sensor chip. */	
+							nrf_libuarte_async_config.rx_pin     = SENSOR_RXD;
+							nrf_libuarte_async_config.baudrate   = NRF_UARTE_BAUDRATE_4800;
+							nrf_libuarte_async_config.parity     = NRF_UARTE_PARITY_INCLUDED;
 							nrf_libuarte_async_config.hwfc       = NRF_UARTE_HWFC_DISABLED;
 							nrf_libuarte_async_config.timeout_us = NRF_UARTE_RX_TIMEOUT;
 							nrf_libuarte_async_config.int_prio   = APP_IRQ_PRIORITY_LOW_MID;
@@ -172,7 +169,7 @@ void vCOMOpen( unsigned portBASE_TYPE xComID, signed char *pcUartRxBuffer, unsig
 							pxTxBufferQueue = ( nrf_queue_t * )&xTxBufferQueueCOM0;
 							break;
 
-			case COM1:		nrf_libuarte_async_config.tx_pin     = TRC_TXD;			/* COM port for trace output. */
+			case COM1:		nrf_libuarte_async_config.tx_pin     = TRC_TXD;				/* COM port for trace output. */
 							nrf_libuarte_async_config.rx_pin     = TRC_RXD;
 							nrf_libuarte_async_config.baudrate   = NRF_UARTE_BAUDRATE_115200;
 							nrf_libuarte_async_config.parity     = NRF_UARTE_PARITY_EXCLUDED;
@@ -665,34 +662,6 @@ void vUartRxISR( nrf_libuarte_async_evt_t * p_evt, struct COM_PORT *pxCom )
 					}
 				}
 			}
-			else if ( ( ( cChar == '[' ) || ( cChar == '{' ) ) && ( pxCom->uiRxStrgLen != 0 ) )
-			{
-				/* The string contains two concatenated messages from the server. Server messages are
-				   delimited by '[' and ']' or by '{' and '}'.
-				   In this case, terminate the first message before storing the new message. */
-				switch ( xStoreRxCharInBuffer( pxCom, 0 ) )
-				{
-					case COM_RXBUF_SUCCESS:					/* Nothing special: store was OK. Inform the Parser. */
-					case COM_RXBUF_TRUNCATED:				/* Nothing special either: We wanted to store a 0x00 and did it, even if it was the last location in the buffer. */
-												xSemaphoreGiveFromISR( pxCom->xUartRxCountingSemaphore, &xHigherPriorityTaskWoken );
-												pxCom->uiRxStrgLen = 0;
-												break;
-					case COM_RXBUF_FULL:		break;		/* Ignore storing the end-of-string. The string has already been truncated before. */
-				}
-
-				/* Now store the start of the message. */
-				switch ( xStoreRxCharInBuffer( pxCom, cChar ) )
-				{
-					case COM_RXBUF_SUCCESS:					/* Nothing special: store was OK. */
-												pxCom->uiRxStrgLen++;				
-												break;
-					case COM_RXBUF_TRUNCATED:				/* String has been truncated. Nevertheless, inform the Parser about the new string. */
-												xSemaphoreGiveFromISR( pxCom->xUartRxCountingSemaphore, &xHigherPriorityTaskWoken );
-												pxCom->uiRxStrgLen = 0;
-												break;
-					case COM_RXBUF_FULL:		break;		/* Ignore the character. */
-				}
-			}
 			else if ( ( cChar != 0 ) && ( cChar != 0x1a ) )
 			{
 				/* Any other non-special character: store it in the buffer. */
@@ -712,10 +681,12 @@ void vUartRxISR( nrf_libuarte_async_evt_t * p_evt, struct COM_PORT *pxCom )
 		else
 		{
 			/* Binary mode: Store any character in the buffer. */
-			if ( xStoreRxCharInBuffer( pxCom, cChar ) )
+			if ( xStoreRxCharInBuffer( pxCom, cChar ) == COM_RXBUF_SUCCESS )
 			{
 				pxCom->uiRxStrgLen++;				
 			}
+			nrf_gpio_pin_set( LED_1 );				// DEBUG DEBUG DEBUG
+			nrf_gpio_pin_clear( LED_1 );				// DEBUG DEBUG DEBUG
 		}
 	}
 }
@@ -772,7 +743,7 @@ static void vUartEventHandler( void * pvContext, nrf_libuarte_async_evt_t * pxEv
 			}
 			else
 			{
-				NRF_LOG_ERROR( "%i Error: Memory block to free is not marked as allocated @0x%8.8x", ulReadRTC(), pxEvt->data.rxtx.p_data );
+				NRF_LOG_ERROR( "Error: Memory block to free is not marked as allocated @0x%8.8x", pxEvt->data.rxtx.p_data );
 			}
 			
 			NRF_LOG_DEBUG( "free %8.8x, %i", pxEvt->data.rxtx.p_data, pxEvt->data.rxtx.length );

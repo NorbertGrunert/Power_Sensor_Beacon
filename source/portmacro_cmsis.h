@@ -29,6 +29,7 @@
 #ifndef PORTMACRO_CMSIS_H
 #define PORTMACRO_CMSIS_H
 #include "app_util.h"
+#include "main.h"
 
 #ifdef __cplusplus
 extern "C" {
