@@ -13,6 +13,8 @@
 /* Size of the Sensor UART Rx ring buffer. */
 #define	powerSensorUART_RX_BUFFER_SIZE			uartRX_BUFFER_SIZE
 
+#define ADV_UPDATE_INTERVAL						2  * portTICKS_PER_SEC
+
 /* Sensor data as received by the UART. */
 #define SENSOR_PACKET_INTERVAL					100							/* ms */
 #define SENSOR_PACKET_DURATION					55							/* ms */
@@ -70,9 +72,26 @@
 #define SENSOR_UNCALIBRATED_ERROR				0x40
 #define SENSOR_CHKSUM_ERROR						0x80
 
-#define SENSOR_TX_LENGTH						30							/* Length of sensor Tx data fild in octets. */
-#define SENSOR_TX_STATUS_OFFS					0							/* Status byte. */
-#define SENSOR_TX_OFFS							2
+#define SENSOR_TX_SYSTEM_ID_ID					0							/* System ID field. */
+#define SENSOR_TX_SENSOR_ID_ID					1							/* Sensor ID field. */
+#define SENSOR_TX_STATUS_ID						2							/* Status field. */
+#define SENSOR_TX_VOLTAGE_ID					3							/* Voltage field. */
+#define SENSOR_TX_CURRENT_ID					4							/* Current field. */
+#define SENSOR_TX_POWER_ID						5							/* Power field. */
+
+#define SENSOR_TX_SYSTEM_ID_OFFS				0							/* System ID field. */
+#define SENSOR_TX_SENSOR_ID_OFFS				3							/* Sensor ID field. */
+#define SENSOR_TX_STATUS_OFFS					6							/* Status field. */
+#define SENSOR_TX_VOLTAGE_OFFS					10							/* Voltage field. */
+#define SENSOR_TX_CURRENT_OFFS					16							/* Current field. */
+#define SENSOR_TX_POWER_OFFS					22							/* Power field. */
+
+#define ID_OFFS									0
+#define LEN_OFFS								1
+#define DATA_OFFS								2
+
+#define SYSTEM_ID								0x55						/* System ID field. */
+#define SENSOR_ID								1							/* Sensor ID field. */
 /*-----------------------------------------------------------*/
 
 /* Public function prototypes. */
