@@ -100,6 +100,13 @@ struct KNOWN_DEVICE
 	TickType_t					xRxTimeStamp;
 	int8_t						xRSSI[ RSSI_LIST_LEN ];
 };
+
+/* SR / LR definition. */
+enum xIF_TYPE
+{
+	SR,
+	LR
+};
 /*-----------------------------------------------------------*/
 
 /* Public function prototypes. */

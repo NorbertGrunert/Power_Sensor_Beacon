@@ -46,17 +46,25 @@ NRF_LOG_MODULE_REGISTER();
 /* Timer callback for periodic BLE beacon advertising payload update. */
 void vBleAdvUpdateCallback( TimerHandle_t xTimer );
 
-/* Store a long value in 4 individual, consecutive octets in little endian. */
-void vStoreLongInDatField( uint8_t *puiTarget, uint32_t ui32Data );
+/* Store a byte value. */
+void vStoreByteInDatField( uint8_t *puiTarget, portBASE_TYPE *pxIdx, uint8_t ui8Id, uint8_t ui8Data );
 
-/* Create the BLE long-range advertising payload. */
-void vFormatBeaconPayload( uint32_t ui16Status, double dVoltage, double dCurrent, double dPower );
+/* Store a short value in 2 individual, consecutive octets in little endian. */
+void vStoreShortInDatField( uint8_t *puiTarget, portBASE_TYPE *pxIdx, uint8_t ui8Id, uint16_t ui16Data );
+
+/* Store a long value in 4 individual, consecutive octets in little endian. */
+void vStoreLongInDatField( uint8_t *puiTarget, portBASE_TYPE *pxIdx, uint8_t ui8Id, uint32_t ui32Data );
 
 /* Convert 3 individual octets to a 24-bit value. The octets are stored in the order of high/middle/low otets. */
 uint32_t ui32ConvertSensorData24Bit( uint8_t *pui8Data );
 
 /* Convert 3 individual octets to a 32-bit long value. The octets are stored in little-endian the order. */
 uint32_t ui32ConvertSensorData32BitLE( uint8_t *pui8Data );
+
+/* Create the BLE long-range advertising payload. */
+void vFormatBeaconPayload( uint32_t ui16Status, double dVoltage, double dCurrent, double dPower,
+						   uint32_t ui32SensorVCoeff, uint32_t ui32SensorVCycles, uint32_t ui32SensorICoef, 
+						   uint32_t ui32SensorICcycles, uint32_t ui32SensorPCoeff, uint32_t ui32SensorPCycles );
 
 /* Parse Sensor data. */
 void vParseSensorData( uint8_t *pui8SensorData );
@@ -135,13 +143,34 @@ uint32_t ui32ConvertSensorData32BitLE( uint8_t *pui8Data )
 }
 /*-----------------------------------------------------------*/
 
-/* Store a long value in 4 individual, consecutive octets in little endian. */
-void vStoreLongInDatField( uint8_t *puiTarget, uint32_t ui32Data )
+/* Store a byte value. */
+void vStoreByteInDatField( uint8_t *puiTarget, portBASE_TYPE *pxIdx, uint8_t ui8Id, uint8_t ui8Data )
 {
-	*( puiTarget + 0 ) = ( uint8_t )( ui32Data & 0x000000ff ) >> 0;
-	*( puiTarget + 1 ) = ( uint8_t )( ui32Data & 0x0000ff00 ) >> 8;
-	*( puiTarget + 2 ) = ( uint8_t )( ui32Data & 0x00ff0000 ) >> 16;
-	*( puiTarget + 3 ) = ( uint8_t )( ui32Data & 0xff000000 ) >> 24;
+	*( puiTarget + ( *pxIdx )++ ) = ui8Id;
+	*( puiTarget + ( *pxIdx )++ ) = 1;
+	*( puiTarget + ( *pxIdx )++ ) = ui8Data;
+}
+/*-----------------------------------------------------------*/
+
+/* Store a short value in 2 individual, consecutive octets in little endian. */
+void vStoreShortInDatField( uint8_t *puiTarget, portBASE_TYPE *pxIdx, uint8_t ui8Id, uint16_t ui16Data )
+{
+	*( puiTarget + ( *pxIdx )++ ) = ui8Id;
+	*( puiTarget + ( *pxIdx )++ ) = 2;
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui16Data & 0x00ff ) >> 0;
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui16Data & 0xff00 ) >> 8;
+}
+/*-----------------------------------------------------------*/
+
+/* Store a long value in 4 individual, consecutive octets in little endian. */
+void vStoreLongInDatField( uint8_t *puiTarget, portBASE_TYPE *pxIdx, uint8_t ui8Id, uint32_t ui32Data )
+{
+	*( puiTarget + ( *pxIdx )++ ) = ui8Id;
+	*( puiTarget + ( *pxIdx )++ ) = 4;
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui32Data & 0x000000ff ) >> 0;
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui32Data & 0x0000ff00 ) >> 8;
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui32Data & 0x00ff0000 ) >> 16;
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui32Data & 0xff000000 ) >> 24;
 }
 /*-----------------------------------------------------------*/
 
@@ -157,11 +186,35 @@ void vBleAdvUpdateCallback( TimerHandle_t xTimer )
 	
 	vStartAdvertising( ADV_LR125KBPS );
 
-	NRF_LOG_DEBUG( "current: %imA", ui32ConvertSensorData32BitLE( &cEncodedLR125kbpsAdvData[ SENSOR_TX_CURRENT_OFFS + DATA_OFFS ] ) );
-	NRF_LOG_DEBUG( "voltage: %imV", ui32ConvertSensorData32BitLE( &cEncodedLR125kbpsAdvData[ SENSOR_TX_VOLTAGE_OFFS + DATA_OFFS ] ) );
-	NRF_LOG_DEBUG( "power:   %imW", ui32ConvertSensorData32BitLE( &cEncodedLR125kbpsAdvData[ SENSOR_TX_POWER_OFFS   + DATA_OFFS ] ) );
+	NRF_LOG_DEBUG( "current: %imA", ui32ConvertSensorData32BitLE( &cEncodedLR125kbpsAdvData[ SENSOR_CURRENT_OFFS + DATA_OFFS ] ) );
+	NRF_LOG_DEBUG( "voltage: %imV", ui32ConvertSensorData32BitLE( &cEncodedLR125kbpsAdvData[ SENSOR_VOLTAGE_OFFS + DATA_OFFS ] ) );
+	NRF_LOG_DEBUG( "power:   %imW", ui32ConvertSensorData32BitLE( &cEncodedLR125kbpsAdvData[ SENSOR_POWER_OFFS   + DATA_OFFS ] ) );
 		
 	NRF_LOG_FLUSH();
+}
+/*-----------------------------------------------------------*/
+
+/* Set the advertising payload: Initialise. 
+   Fill the first three bytes of the payload with the AD flag. */
+void vSetAdvPayloadInit( enum xIF_TYPE xRfInterface )
+{
+	if ( xRfInterface == SR )
+	{
+		cEncodedStd1MbpsAdvData[ 0 ] = 0x02;			/* AD length: 2 bytes. */
+		cEncodedStd1MbpsAdvData[ 1 ] = 0x01;			/* AD Type: 1 = advertiser flags. */
+		cEncodedStd1MbpsAdvData[ 2 ] = 0x04;			/* AD Flag value: not discoverable, BR/EDR not supported. */
+		xEncodedStd1MbpsAdvDataLen = 3;
+	}
+	else
+	{
+		if ( xRfInterface == LR )
+		{
+			cEncodedLR125kbpsAdvData[ 0 ] = 0x02;		/* AD length: 2 bytes. */
+			cEncodedLR125kbpsAdvData[ 1 ] = 0x01;		/* AD Type: 1 = advertiser flags. */
+			cEncodedLR125kbpsAdvData[ 2 ] = 0x04;		/* AD Flag value: not discoverable, BR/EDR not supported. */
+			xEncodedLR125kbpsAdvDataLen = 3;
+		}
+	}
 }
 /*-----------------------------------------------------------*/
 
@@ -196,7 +249,9 @@ void vBleAdvUpdateCallback( TimerHandle_t xTimer )
 	4		  |	   4	 |  uint32	| current in mA
 	5		  |	   4	 |  uint32  | power in mW
 */
-void vFormatBeaconPayload( uint32_t ui16Status, double dVoltage, double dCurrent, double dPower )
+void vFormatBeaconPayload( uint32_t ui16Status, double dVoltage, double dCurrent, double dPower,
+						   uint32_t ui32SensorVCoeff, uint32_t ui32SensorVCycles, uint32_t ui32SensorICoef, 
+						   uint32_t ui32SensorICcycles, uint32_t ui32SensorPCoeff, uint32_t ui32SensorPCycles )
 {
 	uint32_t				ui32Voltage;
 	uint32_t				ui32Current;
@@ -206,32 +261,37 @@ void vFormatBeaconPayload( uint32_t ui16Status, double dVoltage, double dCurrent
 	ui32Current = ( uint32_t )( dCurrent * 1000.0 );
 	ui32Power   = ( uint32_t )( dPower   * 1000.0 );
 
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_SYSTEM_ID_OFFS +   ID_OFFS     ] = SENSOR_TX_SYSTEM_ID_ID;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_SYSTEM_ID_OFFS +  LEN_OFFS     ] = 1;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_SYSTEM_ID_OFFS + DATA_OFFS     ] = SYSTEM_ID;
+	/* Let the BLE handler copy the data into the softdevice control structures. */
+	vSetAdvPayloadInit( LR );
 
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_SENSOR_ID_OFFS +   ID_OFFS     ] = SENSOR_TX_SENSOR_ID_ID;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_SENSOR_ID_OFFS +  LEN_OFFS     ] = 1;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_SENSOR_ID_OFFS + DATA_OFFS     ] = SENSOR_ID;
+	/* Add the manufacturer specific payload. */
+	cEncodedLR125kbpsAdvData[ xEncodedLR125kbpsAdvDataLen++ ] = 0;							/* to be filled in later. */
+	cEncodedLR125kbpsAdvData[ xEncodedLR125kbpsAdvDataLen++ ] = 0xFF;
+	cEncodedLR125kbpsAdvData[ xEncodedLR125kbpsAdvDataLen++ ] = 0x17;
+	cEncodedLR125kbpsAdvData[ xEncodedLR125kbpsAdvDataLen++ ] = 0x00;
 
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_STATUS_OFFS    +   ID_OFFS     ] = SENSOR_TX_STATUS_ID;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_STATUS_OFFS    +  LEN_OFFS     ] = 2;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_STATUS_OFFS    + DATA_OFFS + 0 ] = ( ui16Status & 0x00ff ) >> 0;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_STATUS_OFFS    + DATA_OFFS + 1 ] = ( ui16Status & 0xff00 ) >> 8;
+	cEncodedLR125kbpsAdvData[ xEncodedLR125kbpsAdvDataLen++ ] = 0xCA;
+	cEncodedLR125kbpsAdvData[ xEncodedLR125kbpsAdvDataLen++ ] = 0xFE;
+	cEncodedLR125kbpsAdvData[ xEncodedLR125kbpsAdvDataLen++ ] = 0xCA;
+	cEncodedLR125kbpsAdvData[ xEncodedLR125kbpsAdvDataLen++ ] = 0xFE;
 
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_VOLTAGE_OFFS   +   ID_OFFS     ] = SENSOR_TX_VOLTAGE_ID;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_VOLTAGE_OFFS   +  LEN_OFFS     ] = 4;
-	vStoreLongInDatField( &cEncodedLR125kbpsAdvData[ SENSOR_TX_VOLTAGE_OFFS + DATA_OFFS ], ui32Voltage );
+	vStoreByteInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_SYSTEM_ID_ID, SYSTEM_ID );
+	vStoreByteInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_SENSOR_ID_ID, SENSOR_ID );
+	vStoreShortInDatField( cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_TIMESTAMP_ID, usReadRTC() );
 
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_CURRENT_OFFS   +   ID_OFFS     ] = SENSOR_TX_CURRENT_ID;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_CURRENT_OFFS   +  LEN_OFFS     ] = 4;
-	vStoreLongInDatField( &cEncodedLR125kbpsAdvData[ SENSOR_TX_CURRENT_OFFS + DATA_OFFS ], ui32Current );
+	vStoreShortInDatField( cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_STATUS_ID,    ui16Status );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_VOLTAGE_ID,   ui32Voltage );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_CURRENT_ID,   ui32Current );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_POWER_ID,     ui32Power );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_VCOEFF_ID,    ui32SensorVCoeff );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_VCYCLES_ID,   ui32SensorVCycles );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_ICOEFF_ID,    ui32SensorICoef );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_ICYCLES_ID,   ui32SensorICcycles );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_PCOEFF_ID,    ui32SensorPCoeff );
+	vStoreLongInDatField(  cEncodedLR125kbpsAdvData, &xEncodedLR125kbpsAdvDataLen, SENSOR_PCYCLES_ID,   ui32SensorPCycles );
 
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_POWER_OFFS     +   ID_OFFS     ] = SENSOR_TX_POWER_ID;
-	cEncodedLR125kbpsAdvData[ SENSOR_TX_POWER_OFFS     +  LEN_OFFS     ] = 4;
-	vStoreLongInDatField( &cEncodedLR125kbpsAdvData[ SENSOR_TX_POWER_OFFS   + DATA_OFFS ], ui32Power );
-
-	xEncodedLR125kbpsAdvDataLen = 28;
+	/* Fill in the effective data field length. */
+	cEncodedLR125kbpsAdvData[ 3 ] = xEncodedLR125kbpsAdvDataLen - 4;
 }
 /*-----------------------------------------------------------*/
 
@@ -310,30 +370,27 @@ void vParseSensorData( uint8_t *pui8SensorData )
 				V1R = 1000 as 1Ohm = 1000 * 1Ohm
 				V2R = 1.88 as (0.91 + 0.91 + 0.0604)MOHm = 1.8804 * 1MOhm = 1.88 * 1MOhm
 		*/
-		ui32SensorVCoeff = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_UKH_OFFS );
-		ui32SensorVCycles = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_UTH_OFFS );
-		ui32SensorICoef = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_IKH_OFFS );
+		ui32SensorVCoeff   = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_UKH_OFFS );
+		ui32SensorVCycles  = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_UTH_OFFS );
+		ui32SensorICoef    = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_IKH_OFFS );
 		ui32SensorICcycles = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_ITH_OFFS );
-		ui32SensorPCoeff = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_PKH_OFFS );
-		ui32SensorPCycles = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_PTH_OFFS );
+		ui32SensorPCoeff   = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_PKH_OFFS );
+		ui32SensorPCycles  = ui32ConvertSensorData24Bit( pui8SensorData + SENSOR_PTH_OFFS );
 
 		dCurrent = ( double )ui32SensorICoef          / ( double )ui32SensorICcycles;
 		dVoltage = ( double )ui32SensorVCoeff * 1.88  / ( double )ui32SensorVCycles;
 		dPower   = ( double )ui32SensorPCoeff * 1.88  / ( double )ui32SensorPCycles;
-
-		NRF_LOG_DEBUG( "current: %i", ( int )dCurrent );
-		NRF_LOG_DEBUG( "voltage: %i", ( int )dVoltage );
-		NRF_LOG_DEBUG( "power:   %i", ( int )dPower );
 	}
 	else
 	{
 		dCurrent = 0.0;
 		dVoltage = 0.0;
-		dPower = 0.0;
+		dPower   = 0.0;
 	}
 
 	/* Format the beacon data fied. */
-	vFormatBeaconPayload( ui16SensorStatus, dVoltage, dCurrent, dPower );
+	vFormatBeaconPayload( ui16SensorStatus, dVoltage, dCurrent, dPower,
+						  ui32SensorVCoeff, ui32SensorVCycles, ui32SensorICoef, ui32SensorICcycles, ui32SensorPCoeff, ui32SensorPCycles );
 }
 /*-----------------------------------------------------------*/
 
@@ -362,6 +419,8 @@ static portTASK_FUNCTION( vPowerSensorTask, pvParameters )
 	nrf_gpio_pin_set( LED_3 );					// DEBUG DEBUG DEBUG
 	nrf_gpio_pin_clear( LED_3 );				// DEBUG DEBUG DEBUG
 
+	/* Start the BLE advertising data update timer. */
+	( void )xTimerStart( xBleAdvUpdateTimer, BLE_OS_TIMEOUT );
 
 	while ( 1 )
 	{

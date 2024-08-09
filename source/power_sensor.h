@@ -72,19 +72,26 @@
 #define SENSOR_UNCALIBRATED_ERROR				0x40
 #define SENSOR_CHKSUM_ERROR						0x80
 
-#define SENSOR_TX_SYSTEM_ID_ID					0							/* System ID field. */
-#define SENSOR_TX_SENSOR_ID_ID					1							/* Sensor ID field. */
-#define SENSOR_TX_STATUS_ID						2							/* Status field. */
-#define SENSOR_TX_VOLTAGE_ID					3							/* Voltage field. */
-#define SENSOR_TX_CURRENT_ID					4							/* Current field. */
-#define SENSOR_TX_POWER_ID						5							/* Power field. */
+#define SENSOR_SYSTEM_ID_ID						0							/* System ID field. */
+#define SENSOR_SENSOR_ID_ID						1							/* Sensor ID field. */
+#define SENSOR_TIMESTAMP_ID						2							/* Timestamp field. */
+#define SENSOR_STATUS_ID						3							/* Status field. */
+#define SENSOR_VOLTAGE_ID						4							/* Voltage field. */
+#define SENSOR_CURRENT_ID						5							/* Current field. */
+#define SENSOR_POWER_ID							6							/* Power field. */
+#define SENSOR_VCOEFF_ID						7							/* Voltage coefficient field. */
+#define SENSOR_VCYCLES_ID						8							/* Voltage cycles field. */
+#define SENSOR_ICOEFF_ID						9							/* Current coefficient field. */
+#define SENSOR_ICYCLES_ID						10							/* Current cycles field. */
+#define SENSOR_PCOEFF_ID						11							/* Power coefficient field. */
+#define SENSOR_PCYCLES_ID						12							/* Power cycles field. */
 
-#define SENSOR_TX_SYSTEM_ID_OFFS				0							/* System ID field. */
-#define SENSOR_TX_SENSOR_ID_OFFS				3							/* Sensor ID field. */
-#define SENSOR_TX_STATUS_OFFS					6							/* Status field. */
-#define SENSOR_TX_VOLTAGE_OFFS					10							/* Voltage field. */
-#define SENSOR_TX_CURRENT_OFFS					16							/* Current field. */
-#define SENSOR_TX_POWER_OFFS					22							/* Power field. */
+#define SENSOR_SYSTEM_ID_OFFS					0							/* System ID field. */
+#define SENSOR_SENSOR_ID_OFFS					3							/* Sensor ID field. */
+#define SENSOR_STATUS_OFFS						6							/* Status field. */
+#define SENSOR_VOLTAGE_OFFS						10							/* Voltage field. */
+#define SENSOR_CURRENT_OFFS						16							/* Current field. */
+#define SENSOR_POWER_OFFS						22							/* Power field. */
 
 #define ID_OFFS									0
 #define LEN_OFFS								1
