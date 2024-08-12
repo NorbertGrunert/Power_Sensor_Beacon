@@ -67,10 +67,11 @@
 #define SENSOR_CHKSUM_OFFS						23							/* Packet checksum */
 
 /* Sensor data as transmitted via BLE. */
-#define SENSOR_HEADER1_ERROR					0x10
-#define SENSOR_HEADER2_ERROR					0x20
-#define SENSOR_UNCALIBRATED_ERROR				0x40
-#define SENSOR_CHKSUM_ERROR						0x80
+#define SENSOR_HEADER1_ERROR					0x0010
+#define SENSOR_HEADER2_ERROR					0x0020
+#define SENSOR_UNCALIBRATED_ERROR				0x0040
+#define SENSOR_CHKSUM_ERROR						0x0080
+#define SENSOR_HW_ERROR							0x0100
 
 #define SENSOR_SYSTEM_ID_ID						0							/* System ID field. */
 #define SENSOR_SENSOR_ID_ID						1							/* Sensor ID field. */

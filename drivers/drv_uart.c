@@ -685,8 +685,6 @@ void vUartRxISR( nrf_libuarte_async_evt_t * p_evt, struct COM_PORT *pxCom )
 			{
 				pxCom->uiRxStrgLen++;				
 			}
-			nrf_gpio_pin_set( LED_1 );				// DEBUG DEBUG DEBUG
-			nrf_gpio_pin_clear( LED_1 );				// DEBUG DEBUG DEBUG
 		}
 	}
 }

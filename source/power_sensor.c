@@ -99,9 +99,9 @@ void vPowerSensorInit( UBaseType_t uxPriority )
 {
 	/* Create advertisement update timer. */
 	xBleAdvUpdateTimer = xTimerCreate (
-										"",			 				/* Timer name for debug. */
+										"",			 					/* Timer name for debug. */
 										ADV_UPDATE_INTERVAL,			/* BLE advertising payload update inetrval. */
-										pdTRUE,						/* Auto-reload. */
+										pdTRUE,							/* Auto-reload. */
 										( void * )0,					/* Init for the ID / expiry count. */
 										vBleAdvUpdateCallback			/* Callback. */
 									  );
@@ -121,21 +121,21 @@ uint32_t ui32ConvertSensorData24Bit( uint8_t *pui8Data )
 {
 	uint32_t	ui32Result;
 
-	ui32Result =   ( *pui8Data         << 16 )
+	ui32Result =   ( *( pui8Data + 0 ) << 16 )
 				 + ( *( pui8Data + 1 ) <<  8 )
 				 + ( *( pui8Data + 2 ) <<  0 );
 	return ui32Result;
 }
 /*-----------------------------------------------------------*/
 
-/* Convert 3 individual octets to a 32-bit long value. The octets are stored in little-endian the order (low to high)
+/* Convert 4 individual octets to a 32-bit long value. The octets are stored in little-endian the order (low to high)
    sequencially at the given pointer. 
 */
 uint32_t ui32ConvertSensorData32BitLE( uint8_t *pui8Data )
 {
 	uint32_t	ui32Result;
 
-	ui32Result =   ( *pui8Data         <<  0 )
+	ui32Result =   ( *( pui8Data + 0 ) <<  0 )
 				 + ( *( pui8Data + 1 ) <<  8 )
 				 + ( *( pui8Data + 2 ) << 16 )
 				 + ( *( pui8Data + 3 ) << 24 );
@@ -157,8 +157,8 @@ void vStoreShortInDatField( uint8_t *puiTarget, portBASE_TYPE *pxIdx, uint8_t ui
 {
 	*( puiTarget + ( *pxIdx )++ ) = ui8Id;
 	*( puiTarget + ( *pxIdx )++ ) = 2;
-	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui16Data & 0x00ff ) >> 0;
-	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui16Data & 0xff00 ) >> 8;
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ( ui16Data & 0x00ff ) >> 0 );
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ( ui16Data & 0xff00 ) >> 8 );
 }
 /*-----------------------------------------------------------*/
 
@@ -167,10 +167,10 @@ void vStoreLongInDatField( uint8_t *puiTarget, portBASE_TYPE *pxIdx, uint8_t ui8
 {
 	*( puiTarget + ( *pxIdx )++ ) = ui8Id;
 	*( puiTarget + ( *pxIdx )++ ) = 4;
-	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui32Data & 0x000000ff ) >> 0;
-	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui32Data & 0x0000ff00 ) >> 8;
-	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui32Data & 0x00ff0000 ) >> 16;
-	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ui32Data & 0xff000000 ) >> 24;
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ( ui32Data & 0x000000ff ) >>  0 );
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ( ui32Data & 0x0000ff00 ) >>  8 );
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ( ui32Data & 0x00ff0000 ) >> 16 );
+	*( puiTarget + ( *pxIdx )++ ) = ( uint8_t )( ( ui32Data & 0xff000000 ) >> 24 );
 }
 /*-----------------------------------------------------------*/
 
@@ -185,6 +185,10 @@ void vBleAdvUpdateCallback( TimerHandle_t xTimer )
 	( void )xTimer;
 	
 	vStartAdvertising( ADV_LR125KBPS );
+
+	nrf_gpio_pin_clear( LED_1 );
+	vTaskDelay( 0.2 * portTICKS_PER_SEC );
+	nrf_gpio_pin_set( LED_1 );
 
 	NRF_LOG_DEBUG( "current: %imA", ui32ConvertSensorData32BitLE( &cEncodedLR125kbpsAdvData[ SENSOR_CURRENT_OFFS + DATA_OFFS ] ) );
 	NRF_LOG_DEBUG( "voltage: %imV", ui32ConvertSensorData32BitLE( &cEncodedLR125kbpsAdvData[ SENSOR_VOLTAGE_OFFS + DATA_OFFS ] ) );
@@ -311,9 +315,6 @@ void vParseSensorData( uint8_t *pui8SensorData )
 	double							dVoltage;
 	double							dPower;
 
-	nrf_gpio_pin_set( LED_3 );					// DEBUG DEBUG DEBUG
-	nrf_gpio_pin_clear( LED_3 );				// DEBUG DEBUG DEBUG
-
 	/* Clear old sensor status. */
 	ui16SensorStatus = 0;
 
@@ -388,7 +389,7 @@ void vParseSensorData( uint8_t *pui8SensorData )
 		dPower   = 0.0;
 	}
 
-	/* Format the beacon data fied. */
+	/* Format the beacon data field. */
 	vFormatBeaconPayload( ui16SensorStatus, dVoltage, dCurrent, dPower,
 						  ui32SensorVCoeff, ui32SensorVCycles, ui32SensorICoef, ui32SensorICcycles, ui32SensorPCoeff, ui32SensorPCycles );
 }
@@ -406,18 +407,12 @@ static portTASK_FUNCTION( vPowerSensorTask, pvParameters )
 	uxSensorDataIdx = 0;
 	xRxTimeStamp = xTaskGetTickCount();
 
-	nrf_gpio_pin_clear( LED_1 );				// DEBUG DEBUG DEBUG
-	nrf_gpio_pin_clear( LED_2 );				// DEBUG DEBUG DEBUG
-	nrf_gpio_pin_clear( LED_3 );				// DEBUG DEBUG DEBUG
+	nrf_gpio_cfg( LED_1, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_DISCONNECT, NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_H0H1, NRF_GPIO_PIN_NOSENSE);
+	nrf_gpio_pin_set( LED_1 );
 
-	vTaskDelay ( 1 );							// DEBUG DEBUG DEBUG
-
-	nrf_gpio_pin_set( LED_1 );					// DEBUG DEBUG DEBUG
-	nrf_gpio_pin_clear( LED_1 );				// DEBUG DEBUG DEBUG
-	nrf_gpio_pin_set( LED_2 );					// DEBUG DEBUG DEBUG
-	nrf_gpio_pin_clear( LED_2 );				// DEBUG DEBUG DEBUG
-	nrf_gpio_pin_set( LED_3 );					// DEBUG DEBUG DEBUG
-	nrf_gpio_pin_clear( LED_3 );				// DEBUG DEBUG DEBUG
+	/* Fill the initial payload with hardware error message. The message will be overwritten as soon 
+	   as the first data has arrived. */
+	vFormatBeaconPayload( SENSOR_HW_ERROR, 0, 0, 0, 0, 0, 0, 0, 0, 0 );
 
 	/* Start the BLE advertising data update timer. */
 	( void )xTimerStart( xBleAdvUpdateTimer, BLE_OS_TIMEOUT );
