@@ -292,8 +292,8 @@ static void vBleStackInit( void )
 	uint8_t			cRngBytesAvailable;
 	
 	/* Initialise the output power to default values. */
-	cTxPower1Mbps = OUTPUT_PWR_6_dBm;
-	cTxPower125kbps = OUTPUT_PWR_6_dBm;
+	cTxPower1Mbps = OUTPUT_PWR_8_dBm;
+	cTxPower125kbps = OUTPUT_PWR_8_dBm;
  	
 	/* Set advertisement interval to default. */
 	ul1MbpsAdvInterval = ADV_INTERVAL;
